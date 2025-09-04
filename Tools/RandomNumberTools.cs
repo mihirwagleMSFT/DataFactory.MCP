@@ -5,7 +5,8 @@ using ModelContextProtocol.Server;
 /// Sample MCP tools for demonstration purposes.
 /// These tools can be invoked by MCP clients to perform various operations.
 /// </summary>
-internal class RandomNumberTools
+[McpServerToolType]
+public class RandomNumberTools
 {
     [McpServerTool]
     [Description("Generates a random number between the specified minimum and maximum values.")]
