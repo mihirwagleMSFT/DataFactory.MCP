@@ -69,14 +69,14 @@ To run the server locally during development:
 
 - .NET 10.0 or later
 - Azure AD tenant and application registration with appropriate permissions
-- Environment variables for authentication (see [Authentication Guide](./docs/authentication.md) for setup details)
+- Environment variables for authentication (see [Authentication Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/authentication.md) for setup details)
 
 
 ## Usage Examples
 
 See the detailed guides for comprehensive usage instructions:
-- **Authentication**: See [Authentication Guide](./docs/authentication.md)
-- **Gateway Management**: See [Gateway Management Guide](./docs/gateway-management.md)
+- **Authentication**: See [Authentication Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/authentication.md)
+- **Gateway Management**: See [Gateway Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/gateway-management.md)
 
 ## Development
 
@@ -101,9 +101,9 @@ dotnet pack -c Release
 
 ## Documentation
 
-- **[Authentication Guide](./docs/authentication.md)** - Complete authentication setup and usage
-- **[Gateway Management Guide](./docs/gateway-management.md)** - Gateway operations and examples
-- **[Architecture Guide](./docs/ARCHITECTURE.md)** - Technical architecture and design details
+- **[Authentication Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/authentication.md)** - Complete authentication setup and usage
+- **[Gateway Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/gateway-management.md)** - Gateway operations and examples
+- **[Architecture Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/ARCHITECTURE.md)** - Technical architecture and design details
 
 ## Contributing
 
@@ -118,7 +118,7 @@ Please follow standard .NET coding conventions and ensure all tests pass before 
 
 ### Extension Points
 
-The server is designed for extensibility. For detailed information on extending functionality, see the [Extension Points section](./docs/ARCHITECTURE.md#extension-points) in our architecture documentation, which covers:
+The server is designed for extensibility. For detailed information on extending functionality, see the [Extension Points section](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/ARCHITECTURE.md#extension-points) in our architecture documentation, which covers:
 
 - **Adding New Tools**: Create custom MCP tools for additional operations
 - **Adding New Services**: Implement new services following our patterns
