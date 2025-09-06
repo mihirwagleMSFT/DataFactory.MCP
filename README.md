@@ -116,6 +116,16 @@ We welcome contributions! To get started:
 
 Please follow standard .NET coding conventions and ensure all tests pass before submitting.
 
+### Extension Points
+
+The server is designed for extensibility. For detailed information on extending functionality, see the [Extension Points section](./docs/ARCHITECTURE.md#extension-points) in our architecture documentation, which covers:
+
+- **Adding New Tools**: Create custom MCP tools for additional operations
+- **Adding New Services**: Implement new services following our patterns
+- **Service Registration**: Proper dependency injection setup
+
+This modular architecture makes it easy to add support for additional Azure services or custom business logic.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
