@@ -23,7 +23,7 @@ concurrency:
 jobs:
   pr-integration-tests:
     name: 🧪 Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: "windows-latest"
 
     # Skip draft PRs unless explicitly requested
     if: github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'test-draft')
