@@ -5,6 +5,8 @@ name: PR Validation
 permissions:
   contents: read
   pull-requests: write
+  checks: write
+  actions: read
 
 on:
   pull_request:
@@ -81,6 +83,13 @@ jobs:
           path: "./DataFactory.MCP.Tests/TestResults/*.trx"
           reporter: dotnet-trx
           fail-on-error: true
+          path-replace-backslashes: false
+          list-suites: all
+          list-tests: all
+          max-annotations: 10
+          fail-on-empty: true
+          only-summary: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 📈 Publish Code Coverage
         uses: codecov/codecov-action@v4
