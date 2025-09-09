@@ -2,6 +2,9 @@
 # Runs integration tests on every PR to validate changes
 
 name: PR Validation
+permissions:
+  contents: read
+  pull-requests: write
 
 on:
   pull_request:
