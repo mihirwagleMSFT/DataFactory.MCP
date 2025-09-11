@@ -149,4 +149,3 @@ extends:
                 inputs:
                   script: 'dir "$(OUTPUTROOT)" *.nupkg /s'
                 continueOnError: true
-                publishLocation: "Container"
