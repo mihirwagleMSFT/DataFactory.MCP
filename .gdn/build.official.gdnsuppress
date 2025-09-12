@@ -8,8 +8,34 @@
       "paths": [
         "**/ModelContextProtocol.dll",
         "**/ModelContextProtocol.Core.dll",
-        "**/*ModelContextProtocol*.dll"
+        "**/*ModelContextProtocol*.dll",
+        "**/gdn-Microsoft.DataFactory.MCP.*/tools/net10.0/any/ModelContextProtocol.dll",
+        "**/gdn-Microsoft.DataFactory.MCP.*/tools/net10.0/any/ModelContextProtocol.Core.dll"
       ]
+    },
+    {
+      "tool": "codesign",
+      "justification": "Third-party dependency ModelContextProtocol.Core.dll with specific signature - cannot be signed with Microsoft certificate",
+      "ruleId": "CodeSign.MissingSigningCert",
+      "signature": "ae8bc4c4ba460f6463835aa0bfefd4803d994d201099f45ee475c1d2f08e9037"
+    },
+    {
+      "tool": "codesign", 
+      "justification": "Third-party dependency ModelContextProtocol.dll with specific signature - cannot be signed with Microsoft certificate",
+      "ruleId": "CodeSign.MissingSigningCert",
+      "signature": "dd3eea937c0c7b2ce197dd7a24c86e65cfd482e3a84978b194642894f5c9981d"
+    },
+    {
+      "tool": "codesign",
+      "justification": "Third-party dependency ModelContextProtocol.Core.dll (symbols) with specific signature - cannot be signed with Microsoft certificate", 
+      "ruleId": "CodeSign.MissingSigningCert",
+      "signature": "59dd0bc27d770e18824514e62ed2d870dfb59f5020c7ed58c309e57748dad488"
+    },
+    {
+      "tool": "codesign",
+      "justification": "Third-party dependency ModelContextProtocol.dll (symbols) with specific signature - cannot be signed with Microsoft certificate",
+      "ruleId": "CodeSign.MissingSigningCert", 
+      "signature": "aa38d66c5faa9c1f4e512c7893bb77eba32a4e12e27ebcf5c48221f273e74a41"
     }
   ]
 }
