@@ -115,18 +115,17 @@ extends:
                   projects: '$(Build.SourcesDirectory)\DataFactory.MCP\DataFactory.MCP.csproj'
                   arguments: "--configuration $(BuildConfiguration) --no-restore"
 
-              # Sign binary files with OneBranch (exactly like OneBranch.Official.yml)
+              # Sign only DataFactory.MCP binaries (not third-party dependencies)
               - task: onebranch.pipeline.signing@1
-                displayName: "Sign binary files"
+                displayName: "Sign DataFactory.MCP binaries"
                 inputs:
                   command: "sign"
                   signing_profile: "external_distribution"
                   files_to_sign: |
-                    **/*.exe;
-                    **/*.dll;
-                    **/*.ps1;
-                    **/*.psm1;
-                    **/*.psd1;
+                    **/DataFactory.MCP.exe;
+                    **/DataFactory.MCP.dll;
+                    **/DataFactory.MCP.*.dll;
+                    **/DataFactory.MCP.*.exe;
                   search_root: '$(Build.SourcesDirectory)\DataFactory.MCP'
 
               # Pack the project using standard dotnet pack
