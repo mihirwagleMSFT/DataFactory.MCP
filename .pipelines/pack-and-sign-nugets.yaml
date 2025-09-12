@@ -117,7 +117,7 @@ extends:
                 inputs:
                   command: "build"
                   projects: "$(Build.SourcesDirectory)/DataFactory.MCP/DataFactory.MCP.csproj"
-                  arguments: "--configuration $(BuildConfiguration) --no-restore --output $(OUTPUTROOT)"
+                  arguments: "--configuration $(BuildConfiguration) --no-restore"
 
               # Sign binary files (following OneBranch.Official.yml pattern)
               - task: onebranch.pipeline.signing@1
@@ -136,7 +136,7 @@ extends:
                     !**/Microsoft.Extensions.*.dll;
                     !**/Microsoft.Identity.Client.dll;
                     !**/System.*.dll;
-                  search_root: "$(OUTPUTROOT)"
+                  search_root: "$(Build.SourcesDirectory)/DataFactory.MCP/bin/$(BuildConfiguration)/net10.0"
 
               # Sign 3rd party dlls (following OneBranch.Official.yml pattern)
               - task: onebranch.pipeline.signing@1
@@ -147,7 +147,7 @@ extends:
                   files_to_sign: |
                     **/ModelContextProtocol.dll;
                     **/ModelContextProtocol.Core.dll;
-                  search_root: "$(OUTPUTROOT)"
+                  search_root: "$(Build.SourcesDirectory)/DataFactory.MCP/bin/$(BuildConfiguration)/net10.0"
 
               # Pack the project using standard dotnet pack (to OUTPUTROOT like OneBranch.Official.yml)
               - task: DotNetCoreCLI@2
@@ -157,7 +157,6 @@ extends:
                   packagesToPack: "$(Build.SourcesDirectory)/DataFactory.MCP/DataFactory.MCP.csproj"
                   configuration: "$(BuildConfiguration)"
                   outputDir: "$(OUTPUTROOT)"
-                  nobuild: true
                   includeSymbols: true
 
               # Sign NuGet packages (following OneBranch.Official.yml pattern)
