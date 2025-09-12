@@ -24,8 +24,6 @@
     <RepositoryType>git</RepositoryType>
     <!-- Using a standard OSS license expression; adjust if different license is intended -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <!-- Some internal compliance checks still look for LicenseUrl -->
-    <PackageLicenseUrl>https://opensource.org/license/mit/</PackageLicenseUrl>
     <PackageIcon>Data-Factory-300.png</PackageIcon>
     <PackageReleaseNotes>Initial preview (0.1.0-beta) of the DataFactory MCP server. API surface subject to change.</PackageReleaseNotes>
     <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
