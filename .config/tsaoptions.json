@@ -1,7 +1,7 @@
 {
     "productName": "DataFactory.MCP",
     "codebaseName": "DataFactory.MCP",
-    "areaPath": "",
+    "areaPath": "Power Query\\Gateway\\MetadataService",
     "notificationAliases": [
         "ebramtawfik@microsoft.com"
     ]
