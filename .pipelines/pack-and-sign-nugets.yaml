@@ -68,6 +68,10 @@ extends:
       binskim:
         enabled: true
         break: true
+      suppression:
+        suppressionFile: $(Build.SourcesDirectory)\.gdn\build.official.gdnsuppress
+      baseline:
+        baselineFile: $(Build.SourcesDirectory)\.gdn\build.official.gdnbaselines
 
     stages:
       - stage: build
@@ -138,6 +142,15 @@ extends:
                   outputDir: '$(Build.SourcesDirectory)\DataFactory.MCP\bin\$(BuildConfiguration)'
                   nobuild: true
                   includeSymbols: true
+
+              # Sign NuGet packages with OneBranch (exactly like OneBranch.Official.yml)
+              - task: onebranch.pipeline.signing@1
+                displayName: "Sign NuGet Packages"
+                inputs:
+                  command: "sign"
+                  signing_profile: "external_distribution"
+                  files_to_sign: "*.nupkg;"
+                  search_root: '$(Build.SourcesDirectory)\DataFactory.MCP\bin\$(BuildConfiguration)'
 
               # Copy signed packages to output directory for OneBranch publishing
               - task: CopyFiles@2

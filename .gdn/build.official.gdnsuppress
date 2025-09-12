@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "suppressions": [
+    {
+      "tool": "codesign",
+      "justification": "Third-party dependencies (ModelContextProtocol.dll, ModelContextProtocol.Core.dll) are included as NuGet package dependencies and cannot be signed with Microsoft certificates. These are legitimate external libraries required for MCP functionality.",
+      "ruleId": "CodeSign.MissingSigningCert",
+      "paths": [
+        "**/ModelContextProtocol.dll",
+        "**/ModelContextProtocol.Core.dll",
+        "**/*ModelContextProtocol*.dll"
+      ]
+    }
+  ]
+}
