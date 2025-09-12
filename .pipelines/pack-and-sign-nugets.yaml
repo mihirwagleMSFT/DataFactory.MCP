@@ -119,17 +119,34 @@ extends:
                   projects: '$(Build.SourcesDirectory)\DataFactory.MCP\DataFactory.MCP.csproj'
                   arguments: "--configuration $(BuildConfiguration) --no-restore"
 
-              # Sign only DataFactory.MCP binaries (not third-party dependencies)
+              # Sign binaries using exclusion pattern (like OneBranch.Official.yml)
               - task: onebranch.pipeline.signing@1
-                displayName: "Sign DataFactory.MCP binaries"
+                displayName: "Sign binary files with exclusions"
                 inputs:
                   command: "sign"
                   signing_profile: "external_distribution"
                   files_to_sign: |
-                    **/DataFactory.MCP.exe;
-                    **/DataFactory.MCP.dll;
-                    **/DataFactory.MCP.*.dll;
-                    **/DataFactory.MCP.*.exe;
+                    **/*.exe;
+                    **/*.dll;
+                    **/*.ps1;
+                    **/*.psm1;
+                    **/*.psd1;
+                    !**/ModelContextProtocol.dll;
+                    !**/ModelContextProtocol.Core.dll;
+                    !**/Microsoft.Extensions.*.dll;
+                    !**/Microsoft.Identity.Client.dll;
+                    !**/System.*.dll;
+                  search_root: '$(Build.SourcesDirectory)\DataFactory.MCP'
+
+              # Sign 3rd party dlls with special profile (like OneBranch.Official.yml)
+              - task: onebranch.pipeline.signing@1
+                displayName: "Sign 3rd party dlls"
+                inputs:
+                  command: "sign"
+                  signing_profile: "135020002"
+                  files_to_sign: |
+                    **/ModelContextProtocol.dll;
+                    **/ModelContextProtocol.Core.dll;
                   search_root: '$(Build.SourcesDirectory)\DataFactory.MCP'
 
               # Pack the project using standard dotnet pack
