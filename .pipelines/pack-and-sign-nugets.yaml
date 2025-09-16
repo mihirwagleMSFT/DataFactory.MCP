@@ -83,6 +83,7 @@ extends:
 
     stages:
       - stage: build
+        displayName: "Build and Pack"
         jobs:
           - job: main
             pool:
@@ -201,12 +202,33 @@ extends:
                     } else { Write-Host "Output directory not found: $out" }
                 continueOnError: true
 
-              - task: NuGetCommand@2
+      # Publishing stage - uses release pool for better network access
+      - ${{ if eq(parameters.publishToNuGet, true) }}:
+          - stage: publish_nuget
+            displayName: "Publish to NuGet.org"
+            dependsOn: build
+            variables:
+              - name: ob_release_environment
+                value: Production
+              - name: ob_release_usedeploymentjob
+                value: true
+              - name: ob_deploymentjob_environment
+                value: DataFactory_MCP_NuGet_Gallery
+            jobs:
+              - job: publish_to_nuget
                 displayName: "Publish to NuGet.org"
-                condition: and(succeeded(), eq('${{ parameters.publishToNuGet }}', true))
-                inputs:
-                  command: "push"
-                  packagesToPush: "$(OUTPUTROOT)/**/Microsoft.DataFactory.MCP.*.nupkg;!$(OUTPUTROOT)/**/*.symbols.nupkg"
-                  nuGetFeedType: "external"
-                  publishFeedCredentials: "DataIntegration NuGet"
-                  allowPackageConflicts: true
+                pool:
+                  type: release
+                templateContext:
+                  inputs:
+                    - input: pipelineArtifact
+                      artifactName: drop
+                steps:
+                  - task: NuGetCommand@2
+                    displayName: "Publish to NuGet.org"
+                    inputs:
+                      command: "push"
+                      packagesToPush: "$(Pipeline.Workspace)/drop/**/Microsoft.DataFactory.MCP.*.nupkg;!$(Pipeline.Workspace)/drop/**/*.symbols.nupkg"
+                      nuGetFeedType: "external"
+                      publishFeedCredentials: "DataIntegration NuGet"
+                      allowPackageConflicts: true
