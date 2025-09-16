@@ -7,7 +7,7 @@
 #   - publishToNuGet: Publish to NuGet.org (default: false)                    #
 #                                                                               #
 # Required Service Connections for NuGet publishing:                           #
-#   - "NuGet.org": Service connection (DataIntegration NuGet) configured for NuGet.org                 #
+#   - "DataIntegration NuGet": Service connection configured for NuGet.org     #
 #                                                                               #
 # Documentation:  https://aka.ms/obpipelines                                    #
 # Yaml Schema:    https://aka.ms/obpipelines/yaml/schema                        #
@@ -208,5 +208,5 @@ extends:
                   command: "push"
                   packagesToPush: "$(OUTPUTROOT)/**/Microsoft.DataFactory.MCP.*.nupkg;!$(OUTPUTROOT)/**/*.symbols.nupkg"
                   nuGetFeedType: "external"
-                  publishFeedCredentials: "NuGet.org"
+                  publishFeedCredentials: "DataIntegration NuGet"
                   allowPackageConflicts: true
