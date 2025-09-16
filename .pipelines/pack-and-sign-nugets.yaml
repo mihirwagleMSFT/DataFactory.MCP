@@ -6,8 +6,8 @@
 #   - debug: Enable debug output (default: false)                              #
 #   - publishToNuGet: Publish to NuGet.org (default: false)                    #
 #                                                                               #
-# Required Service Connections for NuGet publishing:                           #
-#   - "DataIntegration NuGet": Service connection configured for NuGet.org     #
+# Required Variables for NuGet publishing:                                     #
+#   - NUGET_API_KEY: API key for NuGet.org publishing (pipeline variable)     #
 #                                                                               #
 # Documentation:  https://aka.ms/obpipelines                                    #
 # Yaml Schema:    https://aka.ms/obpipelines/yaml/schema                        #
@@ -225,10 +225,9 @@ extends:
                       artifactName: drop
                 steps:
                   - task: NuGetCommand@2
-                    displayName: "Publish to NuGet.org"
+                    displayName: "Push to NuGet.org"
                     inputs:
-                      command: "push"
-                      packagesToPush: "$(Pipeline.Workspace)/drop/**/Microsoft.DataFactory.MCP.*.nupkg;!$(Pipeline.Workspace)/drop/**/*.symbols.nupkg"
-                      nuGetFeedType: "external"
-                      publishFeedCredentials: "DataIntegration NuGet"
-                      allowPackageConflicts: true
+                      command: push
+                      packagesToPush: "$(Pipeline.Workspace)/drop/Microsoft.DataFactory.MCP.*.nupkg"
+                      nuGetFeedType: external
+                      publishFeedCredentials: "DataFactory_MCP_NuGet_Connection"
