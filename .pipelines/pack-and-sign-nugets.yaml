@@ -217,6 +217,8 @@ extends:
             jobs:
               - job: publish_to_nuget
                 displayName: "Publish to NuGet.org"
+                pool:
+                  type: release
                 templateContext:
                   inputs:
                     - input: pipelineArtifact
