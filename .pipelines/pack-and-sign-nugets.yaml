@@ -212,6 +212,8 @@ extends:
                 displayName: "Publish to NuGet.org"
                 pool:
                   type: windows
+                variables:
+                  ob_outputDirectory: "$(Pipeline.Workspace)/drop"
                 templateContext:
                   inputs:
                     - input: pipelineArtifact
