@@ -30,13 +30,7 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
         Assert.NotEmpty(result);
 
         // Should contain either authentication status information or an error message
-        Assert.True(
-            result.Contains("authenticated") ||
-            result.Contains("not authenticated") ||
-            result.Contains("Error") ||
-            result.Contains("Authentication service not available"),
-            $"Unexpected response format: {result}"
-        );
+        Assert.Equal("Not authenticated. Please authenticate using interactive login or service principal.", result);
     }
 
     [Fact]
@@ -50,15 +44,7 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
         Assert.NotEmpty(result);
 
         // Should return an error since we're not authenticated
-        Assert.True(
-            result.Contains("Error") ||
-            result.Contains("error") ||
-            result.Contains("Authentication service not available") ||
-            result.Contains("not authenticated") ||
-            result.Contains("No valid authentication found") ||
-            result.Contains("authenticate first"),
-            $"Expected error message but got: {result}"
-        );
+        Assert.Equal("No valid authentication found. Please authenticate first.", result);
     }
 
     [Fact]
@@ -73,13 +59,8 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
 
         // Should return either success message or error
         Assert.True(
-            result.Contains("signed out") ||
-            result.Contains("Sign out") ||
-            result.Contains("Error") ||
-            result.Contains("error") ||
-            result.Contains("Authentication service not available") ||
-            result.Contains("No active authentication session found"),
-            $"Unexpected response format: {result}"
+            result.Contains("Successfully signed out user") ||
+            result.Contains("No active authentication session found.")
         );
     }
 
@@ -98,15 +79,7 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
         Assert.NotNull(result);
         Assert.NotEmpty(result);
 
-        // Should either succeed or fail gracefully
-        Assert.True(
-            result.Contains("Authentication successful") ||
-            result.Contains("Successfully authenticated") ||
-            result.Contains("Service principal authentication completed successfully") ||
-            result.Contains("Service principal authentication failed") ||
-            result.Contains("Authentication error"),
-            $"Expected either success or controlled error but got: {result}"
-        );
+        Assert.Equal($"Service principal authentication completed successfully for application: {realAppId}", result);
     }
 
 }
