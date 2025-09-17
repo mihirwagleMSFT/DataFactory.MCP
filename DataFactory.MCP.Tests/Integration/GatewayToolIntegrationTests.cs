@@ -90,36 +90,6 @@ public class GatewayToolIntegrationTests : FabricToolIntegrationTestBase
         AssertResult("gateways", result);
     }
 
-    [SkippableFact]
-    public async Task GetGatewayAsync_WithAuthentication_AndValidId_ShouldNotReturnAuthenticationError()
-    {
-        // Arrange - Try to authenticate
-        var isAuthenticated = await TryAuthenticateAsync();
-
-        Skip.IfNot(isAuthenticated, "Skipping authenticated test - no valid credentials available");
-
-        var testGatewayId = "test-gateway-id-12345";
-
-        // Act
-        var result = await _gatewayTool.GetGatewayAsync(testGatewayId);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.NotEmpty(result);
-
-        AssertNoAuthenticationError(result);
-
-        // The result should be either a "not found" message or gateway details
-        Assert.True(
-            result.Contains("not found") ||
-            result.Contains("don't have permission") ||
-            result.Contains("id") ||
-            result.Contains("name") ||
-            result.Contains("Error retrieving gateway"),
-            $"Unexpected response when authenticated: {result}"
-        );
-    }
-
     [SkippableTheory]
     [InlineData("non-existent-gateway-id")]
     [InlineData("invalid-guid-format")]
