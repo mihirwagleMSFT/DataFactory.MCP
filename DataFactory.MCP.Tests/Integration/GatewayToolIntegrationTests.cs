@@ -1,6 +1,7 @@
 using Xunit;
 using DataFactory.MCP.Tools;
 using DataFactory.MCP.Tests.Infrastructure;
+using DataFactory.MCP.Models;
 using System.Text.Json;
 
 namespace DataFactory.MCP.Tests.Integration;
@@ -20,6 +21,13 @@ public class GatewayToolIntegrationTests : IClassFixture<McpTestFixture>
         _gatewayTool = _fixture.GetService<GatewayTool>();
     }
 
+    private static void AssertAuthenticationError(string result)
+    {
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+        Assert.Contains($"Authentication error: {ErrorMessages.AuthenticationRequired}", result);
+    }
+
     [Fact]
     public async Task ListGatewaysAsync_WithoutAuthentication_ShouldReturnAuthenticationError()
     {
@@ -27,19 +35,7 @@ public class GatewayToolIntegrationTests : IClassFixture<McpTestFixture>
         var result = await _gatewayTool.ListGatewaysAsync();
 
         // Assert
-        Assert.NotNull(result);
-        Assert.NotEmpty(result);
-
-        // Should return authentication error since we're not authenticated
-        Assert.True(
-            result.Contains("Authentication error") ||
-            result.Contains("Unauthorized") ||
-            result.Contains("authentication") ||
-            result.Contains("Error") ||
-            result.Contains("No valid authentication found") ||
-            result.Contains("authenticate first"),
-            $"Expected authentication error but got: {result}"
-        );
+        AssertAuthenticationError(result);
     }
 
     [Fact]

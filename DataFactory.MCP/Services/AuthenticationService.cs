@@ -181,7 +181,7 @@ public class AuthenticationService : IAuthenticationService
         {
             if (_currentAuth == null || !_currentAuth.IsSuccess)
             {
-                return "No valid authentication found. Please authenticate first.";
+                return ErrorMessages.NoAuthenticationFound;
             }
 
             if (_currentAuth.ExpiresOn.HasValue && _currentAuth.ExpiresOn <= DateTime.UtcNow)
