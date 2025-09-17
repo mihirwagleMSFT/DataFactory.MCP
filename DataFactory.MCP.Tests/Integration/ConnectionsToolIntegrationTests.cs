@@ -10,26 +10,13 @@ namespace DataFactory.MCP.Tests.Integration;
 /// Integration tests for ConnectionsTool that call the actual MCP tool methods
 /// without mocking to verify real behavior
 /// </summary>
-public class ConnectionsToolIntegrationTests : IClassFixture<McpTestFixture>
+public class ConnectionsToolIntegrationTests : FabricToolIntegrationTestBase
 {
     private readonly ConnectionsTool _connectionsTool;
-    private readonly McpTestFixture _fixture;
 
-    public ConnectionsToolIntegrationTests(McpTestFixture fixture)
+    public ConnectionsToolIntegrationTests(McpTestFixture fixture) : base(fixture)
     {
-        _fixture = fixture;
-        _connectionsTool = _fixture.GetService<ConnectionsTool>();
-
-        // Ensure we start with no authentication for unauthenticated tests
-        var authTool = _fixture.GetService<AuthenticationTool>();
-        authTool.SignOutAsync().GetAwaiter().GetResult();
-    }
-
-    private static void AssertAuthenticationError(string result)
-    {
-        Assert.NotNull(result);
-        Assert.NotEmpty(result);
-        Assert.Contains($"Authentication error: {ErrorMessages.AuthenticationRequired}", result);
+        _connectionsTool = Fixture.GetService<ConnectionsTool>();
     }
 
     [Fact]
@@ -151,40 +138,6 @@ public class ConnectionsToolIntegrationTests : IClassFixture<McpTestFixture>
     /// <summary>
     /// Helper method to authenticate using environment variables if available
     /// </summary>
-    private async Task<bool> TryAuthenticateAsync()
-    {
-        var authTool = _fixture.GetService<AuthenticationTool>();
-        var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
-        var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
-        var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
-
-        // Skip authentication tests if environment variables are not set or are placeholder values
-        if (string.IsNullOrEmpty(clientId) ||
-            string.IsNullOrEmpty(clientSecret) ||
-            string.IsNullOrEmpty(tenantId) ||
-            clientId.Contains("#") ||
-            clientSecret.Contains("#") ||
-            tenantId.Contains("#"))
-        {
-            return false;
-        }
-
-        // If credentials are available, authentication must succeed - otherwise fail the test
-        var result = await authTool.AuthenticateServicePrincipalAsync(clientId, clientSecret, tenantId);
-        var success = result.Contains("successfully") || result.Contains("completed successfully");
-        
-        if (!success)
-        {
-            var errorMessage = $"Authentication failed with available credentials. " +
-                             $"Client ID: {clientId}, Tenant ID: {tenantId}, " +
-                             $"Error: {result}";
-            
-            Assert.Fail(errorMessage);
-        }
-        
-        return true;
-    }
-
     [SkippableFact]
     public async Task ListConnectionsAsync_WithAuthentication_ShouldReturnJsonResponseOrNoConnectionsMessage()
     {
