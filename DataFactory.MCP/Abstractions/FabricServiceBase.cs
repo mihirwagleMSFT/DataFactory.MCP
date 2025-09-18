@@ -43,12 +43,12 @@ public abstract class FabricServiceBase
 
             if (tokenResult.Contains("No valid authentication") || tokenResult.Contains("expired"))
             {
-                throw new UnauthorizedAccessException(ErrorMessages.AuthenticationRequired);
+                throw new UnauthorizedAccessException(Messages.AuthenticationRequired);
             }
 
             if (!tokenResult.StartsWith("eyJ")) // Basic JWT token validation
             {
-                throw new UnauthorizedAccessException(ErrorMessages.InvalidTokenFormat);
+                throw new UnauthorizedAccessException(Messages.InvalidTokenFormat);
             }
 
             HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResult);

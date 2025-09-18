@@ -63,7 +63,7 @@ public class ConnectionsToolIntegrationTests : FabricToolIntegrationTestBase
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("Connection ID is required.", result);
+        Assert.Equal(Messages.ConnectionIdRequired, result);
     }
 
     [Fact]

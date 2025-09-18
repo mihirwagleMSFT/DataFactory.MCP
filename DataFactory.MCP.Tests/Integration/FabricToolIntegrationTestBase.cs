@@ -31,7 +31,7 @@ public abstract class FabricToolIntegrationTestBase : IClassFixture<McpTestFixtu
     {
         Assert.NotNull(result);
         Assert.NotEmpty(result);
-        Assert.Contains($"Authentication error: {ErrorMessages.AuthenticationRequired}", result);
+        Assert.Contains($"Authentication error: {Messages.AuthenticationRequired}", result);
     }
 
     /// <summary>

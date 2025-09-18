@@ -1,6 +1,7 @@
 using Xunit;
 using DataFactory.MCP.Tools;
 using DataFactory.MCP.Tests.Infrastructure;
+using DataFactory.MCP.Models;
 
 namespace DataFactory.MCP.Tests.Integration;
 
@@ -8,15 +9,13 @@ namespace DataFactory.MCP.Tests.Integration;
 /// Integration tests for AuthenticationTool that call the actual MCP tool methods
 /// without mocking to verify real behavior
 /// </summary>
-public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
+public class AuthenticationToolIntegrationTests : FabricToolIntegrationTestBase
 {
     private readonly AuthenticationTool _authTool;
-    private readonly McpTestFixture _fixture;
 
-    public AuthenticationToolIntegrationTests(McpTestFixture fixture)
+    public AuthenticationToolIntegrationTests(McpTestFixture fixture) : base(fixture)
     {
-        _fixture = fixture;
-        _authTool = _fixture.GetService<AuthenticationTool>();
+        _authTool = fixture.GetService<AuthenticationTool>();
     }
 
     [Fact]
@@ -30,7 +29,7 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
         Assert.NotEmpty(result);
 
         // Should contain either authentication status information or an error message
-        Assert.Equal("Not authenticated. Please authenticate using interactive login or service principal.", result);
+        Assert.Equal(Messages.NotAuthenticated, result);
     }
 
     [Fact]
@@ -44,7 +43,7 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
         Assert.NotEmpty(result);
 
         // Should return an error since we're not authenticated
-        Assert.Equal("No valid authentication found. Please authenticate first.", result);
+        Assert.Equal(Messages.NoAuthenticationFound, result);
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public class AuthenticationToolIntegrationTests : IClassFixture<McpTestFixture>
         Assert.NotNull(result);
         Assert.NotEmpty(result);
 
-        Assert.Equal($"Service principal authentication completed successfully for application: {realAppId}", result);
+        Assert.Equal(string.Format(Messages.ServicePrincipalAuthenticationSuccessTemplate, realAppId), result);
     }
 
 }

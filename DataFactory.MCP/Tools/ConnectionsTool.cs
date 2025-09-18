@@ -2,6 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
+using DataFactory.MCP.Models;
 using System.Text.Json;
 
 namespace DataFactory.MCP.Tools;
@@ -26,7 +27,7 @@ public class ConnectionsTool
 
             if (!response.Value.Any())
             {
-                return "No connections found. Response has an empty list.";
+                return Messages.NoConnectionsFound;
             }
 
             var result = new
@@ -45,15 +46,15 @@ public class ConnectionsTool
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"Authentication error: {ex.Message}";
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
         }
         catch (HttpRequestException ex)
         {
-            return $"API request failed: {ex.Message}";
+            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
         }
         catch (Exception ex)
         {
-            return $"Error listing connections: {ex.Message}";
+            return string.Format(Messages.ErrorListingConnectionsTemplate, ex.Message);
         }
     }
 
@@ -65,14 +66,14 @@ public class ConnectionsTool
         {
             if (string.IsNullOrWhiteSpace(connectionId))
             {
-                return "Connection ID is required.";
+                return Messages.ConnectionIdRequired;
             }
 
             var connection = await _connectionService.GetConnectionAsync(connectionId);
 
             if (connection == null)
             {
-                return $"Connection with ID '{connectionId}' not found or you don't have permission to access it.";
+                return string.Format(Messages.ConnectionNotFoundTemplate, connectionId);
             }
 
             var result = connection.ToFormattedInfo();
@@ -84,11 +85,11 @@ public class ConnectionsTool
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"Authentication error: {ex.Message}";
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
         }
         catch (Exception ex)
         {
-            return $"Error retrieving connection: {ex.Message}";
+            return string.Format(Messages.ErrorRetrievingConnectionTemplate, ex.Message);
         }
     }
 }

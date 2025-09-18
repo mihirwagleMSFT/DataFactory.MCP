@@ -2,6 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
+using DataFactory.MCP.Models;
 using System.Text.Json;
 
 namespace DataFactory.MCP.Tools;
@@ -26,7 +27,7 @@ public class GatewayTool
 
             if (!response.Value.Any())
             {
-                return "No gateways found. Make sure you have the required permissions (Gateway.Read.All or Gateway.ReadWrite.All).";
+                return Messages.NoGatewaysFound;
             }
 
             var result = new
@@ -45,15 +46,15 @@ public class GatewayTool
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"Authentication error: {ex.Message}";
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
         }
         catch (HttpRequestException ex)
         {
-            return $"API request failed: {ex.Message}";
+            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
         }
         catch (Exception ex)
         {
-            return $"Error listing gateways: {ex.Message}";
+            return string.Format(Messages.ErrorListingGatewaysTemplate, ex.Message);
         }
     }
 
@@ -65,14 +66,14 @@ public class GatewayTool
         {
             if (string.IsNullOrWhiteSpace(gatewayId))
             {
-                return "Gateway ID is required.";
+                return Messages.GatewayIdRequired;
             }
 
             var gateway = await _gatewayService.GetGatewayAsync(gatewayId);
 
             if (gateway == null)
             {
-                return $"Gateway with ID '{gatewayId}' not found or you don't have permission to access it.";
+                return string.Format(Messages.GatewayNotFoundTemplate, gatewayId);
             }
 
             var result = gateway.ToFormattedInfo();
@@ -84,11 +85,11 @@ public class GatewayTool
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"Authentication error: {ex.Message}";
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
         }
         catch (Exception ex)
         {
-            return $"Error retrieving gateway: {ex.Message}";
+            return string.Format(Messages.ErrorRetrievingGatewayTemplate, ex.Message);
         }
     }
 }
