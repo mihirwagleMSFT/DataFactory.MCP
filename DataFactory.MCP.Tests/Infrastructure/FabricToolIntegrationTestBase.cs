@@ -4,7 +4,7 @@ using DataFactory.MCP.Tests.Infrastructure;
 using DataFactory.MCP.Models;
 using System.Text.Json;
 
-namespace DataFactory.MCP.Tests.Integration;
+namespace DataFactory.MCP.Tests.Infrastructure;
 
 /// <summary>
 /// Base class for Fabric tool integration tests providing common authentication 
