@@ -47,6 +47,15 @@ The Microsoft Data Factory MCP Server is a .NET-based application that implement
 │  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────────────────┐ │ │
 │  │ │ GatewayTool │ │  │ │GatewayService│ │  │ │ IFabricGatewayService   │ │ │
 │  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────────────────┘ │ │
+│  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────────────────┐ │ │
+│  │ │ConnectionTool│ │  │ │ConnectionSvc│ │  │ │ IFabricConnectionService │ │ │
+│  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────────────────┘ │ │
+│  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────────────────┐ │ │
+│  │ │WorkspaceTool│ │  │ │WorkspaceSvc │ │  │ │ IFabricWorkspaceService │ │ │
+│  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────────────────┘ │ │
+│  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────────────────┐ │ │
+│  │ │ DataflowTool│ │  │ │DataflowSvc  │ │  │ │ IFabricDataflowService  │ │ │
+│  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────────────────┘ │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘ │
 │                          │                          │                      │
 │                          ▼                          ▼                      │
@@ -54,19 +63,29 @@ The Microsoft Data Factory MCP Server is a .NET-based application that implement
 │  │     Models      │  │   Extensions    │  │         Utilities          │ │
 │  │                 │  │                 │  │                             │ │
 │  │ • Gateway       │  │ • Gateway       │  │ • Logging                   │ │
-│  │ • Auth Result   │  │   Extensions    │  │ • Configuration             │ │
-│  │ • Azure Config  │  │ • JSON          │  │ • Error Handling            │ │
-│  └─────────────────┘  │   Converters    │  └─────────────────────────────┘ │
+│  │ • Connection    │  │   Extensions    │  │ • Configuration             │ │
+│  │ • Workspace     │  │ • Connection    │  │ • Error Handling            │ │
+│  │ • Dataflow      │  │   Extensions    │  │ • Validation                │ │
+│  │ • Auth Result   │  │ • Workspace     │  │ • HTTP Client Factory       │ │
+│  │ • Azure Config  │  │   Extensions    │  │ • JSON Serialization        │ │
+│  └─────────────────┘  │ • Dataflow      │  └─────────────────────────────┘ │
+│                       │   Extensions    │                                  │
+│                       │ • JSON          │                                  │
+│                       │   Converters    │                                  │
 │                       └─────────────────┘                                  │
 └─────────────────────────┬───────────────────────────────────────────────────┘
-                          │ HTTPS / Microsoft Graph API
+                          │ HTTPS / Microsoft Graph API & Fabric API
                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Microsoft Azure                                   │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐ │
-│  │   Azure AD      │  │ Microsoft Graph │  │     Data Factory           │ │
-│  │ Authentication  │  │      API        │  │      Gateways              │ │
+│  │   Azure AD      │  │ Microsoft Graph │  │   Microsoft Fabric          │ │
+│  │ Authentication  │  │      API        │  │  (Workspaces & Dataflows)   │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘ │
+│                       │  • Gateways     │  │  • Data Factory            │ │
+│                       │  • Connections  │  │    Gateways                │ │
+│                       │  • Workspaces   │  │                             │ │
+│                       └─────────────────┘  └─────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,7 +120,10 @@ builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
     .WithTools<AuthenticationTool>()
-    .WithTools<GatewayTool>();
+    .WithTools<GatewayTool>()
+    .WithTools<ConnectionsTool>()
+    .WithTools<WorkspacesTool>()
+    .WithTools<DataflowTool>();
 
 await builder.Build().RunAsync();
 ```
@@ -126,6 +148,16 @@ MCP Tools are the public interface that AI assistants interact with. They handle
 #### GatewayTool  
 - `ListGatewaysAsync()`: List accessible gateways
 - `GetGatewayAsync()`: Get gateway details by ID
+
+#### ConnectionsTool
+- `ListConnectionsAsync()`: List accessible connections
+- `GetConnectionAsync()`: Get connection details by ID
+
+#### WorkspacesTool
+- `ListWorkspacesAsync()`: List accessible workspaces
+
+#### DataflowTool
+- `ListDataflowsAsync()`: List dataflows in a workspace
 
 ### 3. Core Services Layer
 
@@ -162,6 +194,43 @@ public async Task<GatewayResponse> ListGatewaysAsync(string? continuationToken =
 public async Task<Gateway> GetGatewayAsync(string gatewayId)
 ```
 
+#### FabricConnectionService
+Implements `IFabricConnectionService` and handles:
+- Connection data retrieval
+- Microsoft Graph API integration
+- Connection type classification
+- Pagination support
+
+Key Methods:
+```csharp
+public async Task<ConnectionResponse> ListConnectionsAsync(string? continuationToken = null)
+public async Task<Connection> GetConnectionAsync(string connectionId)
+```
+
+#### FabricWorkspaceService
+Implements `IFabricWorkspaceService` and handles:
+- Workspace data retrieval
+- User permission filtering
+- Role-based access control
+- Workspace metadata management
+
+Key Methods:
+```csharp
+public async Task<WorkspaceResponse> ListWorkspacesAsync(string? continuationToken = null, string? roles = null, bool? preferWorkspaceSpecificEndpoints = null)
+```
+
+#### FabricDataflowService
+Implements `IFabricDataflowService` and handles:
+- Dataflow data retrieval from Fabric workspaces
+- Microsoft Fabric Dataflows API integration
+- Workspace-scoped dataflow listing
+- Pagination and error handling
+
+Key Methods:
+```csharp
+public async Task<ListDataflowsResponse> ListDataflowsAsync(string workspaceId, string? continuationToken = null)
+```
+
 ### 4. Abstractions Layer
 
 **Location**: `Abstractions/`
@@ -171,6 +240,9 @@ Defines interfaces and base classes that enable testability and extensibility.
 #### Interfaces
 - `IAuthenticationService`: Authentication operations contract
 - `IFabricGatewayService`: Gateway operations contract
+- `IFabricConnectionService`: Connection operations contract
+- `IFabricWorkspaceService`: Workspace operations contract
+- `IFabricDataflowService`: Dataflow operations contract
 
 #### Base Classes
 - `FabricServiceBase`: Common functionality for Fabric services
@@ -192,6 +264,21 @@ Data Transfer Objects (DTOs) and configuration models:
 - `VirtualNetworkGateway`: Virtual network gateway data
 - `GatewayResponse`: API response wrapper with pagination
 
+#### Connection Models
+- `Connection`: Base connection information
+- `ConnectionDetails`: Detailed connection configuration
+- `ConnectionResponse`: API response wrapper with pagination
+
+#### Workspace Models
+- `Workspace`: Workspace information and metadata
+- `WorkspaceResponse`: API response wrapper with pagination
+
+#### Dataflow Models
+- `Dataflow`: Dataflow information and properties
+- `DataflowProperties`: Dataflow-specific metadata
+- `ListDataflowsResponse`: API response wrapper with pagination
+- `ItemTag`: Tagging and categorization metadata
+
 ### 6. Extensions Layer
 
 **Location**: `Extensions/`
@@ -201,6 +288,15 @@ Extension methods and utility functions:
 #### GatewayExtensions
 - `ToFormattedInfo()`: Format gateway data for display
 - Type-specific formatting methods
+
+#### ConnectionExtensions
+- `ToFormattedInfo()`: Format connection data for display
+
+#### WorkspaceExtensions
+- `ToFormattedInfo()`: Format workspace data for display
+
+#### DataflowExtensions
+- `ToFormattedInfo()`: Format dataflow data for display
 
 #### JSON Converters
 - `GatewayJsonConverter`: Handle polymorphic gateway deserialization
@@ -230,6 +326,19 @@ Extension methods and utility functions:
 6. FabricGatewayService → Processes and formats data
 7. FabricGatewayService → GatewayTool
 8. GatewayTool → AI Assistant (formatted response)
+```
+
+### Dataflow Operations Flow
+
+```
+1. AI Assistant → DataflowTool
+2. DataflowTool → Validates authentication
+3. DataflowTool → FabricDataflowService
+4. FabricDataflowService → Microsoft Fabric API
+5. Microsoft Fabric API → Returns dataflow data
+6. FabricDataflowService → Processes and formats data
+7. FabricDataflowService → DataflowTool
+8. DataflowTool → AI Assistant (formatted response)
 ```
 
 ### Error Flow
