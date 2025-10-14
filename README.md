@@ -7,7 +7,8 @@ A Model Context Protocol (MCP) server for Microsoft Data Factory and Azure Fabri
 - 🔐 **Azure AD Authentication**: Interactive and service principal authentication
 - 🌐 **Gateway Management**: List and manage Azure Data Factory gateways
 - 🔗 **Connection Management**: List and retrieve details for Azure Data Factory connections
-- **Workspace Management**: List and manage Microsoft Fabric workspaces
+- 📊 **Workspace Management**: List and manage Microsoft Fabric workspaces
+- 🌊 **Dataflow Management**: List and manage Microsoft Fabric dataflows
 - 🏗️ **Microsoft Fabric Integration**: Support for on-premises, personal, and virtual network gateways
 - 📦 **NuGet Distribution**: Available as a NuGet package for easy integration
 - 🔧 **MCP Protocol**: Built using the official MCP C# SDK
@@ -18,6 +19,7 @@ A Model Context Protocol (MCP) server for Microsoft Data Factory and Azure Fabri
 - **Gateway Management**: `list_gateways`, `get_gateway`
 - **Connection Management**: `list_connections`, `get_connection`
 - **Workspace Management**: `list_workspaces`, `list_workspaces_summary`
+- **Dataflow Management**: `list_dataflows`
 
 ## Quick Start
 
@@ -83,6 +85,7 @@ See the detailed guides for comprehensive usage instructions:
 - **Gateway Management**: See [Gateway Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/gateway-management.md)
 - **Connection Management**: See [Connection Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/connection-management.md)
 - **Workspace Management**: See [Workspace Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/workspace-management.md)
+- **Dataflow Management**: See [Dataflow Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/dataflow-management.md)
 
 ## Development
 
@@ -114,6 +117,7 @@ For complete documentation, see our **[Documentation Index](https://github.com/m
 - **[Gateway Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/gateway-management.md)** - Gateway operations and examples
 - **[Connection Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/connection-management.md)** - Connection operations and examples
 - **[Workspace Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/workspace-management.md)** - Workspace operations and examples
+- **[Dataflow Management Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/dataflow-management.md)** - Dataflow operations and examples
 - **[Architecture Guide](https://github.com/microsoft/DataFactory.MCP/blob/main/docs/ARCHITECTURE.md)** - Technical architecture and design details
 
 ## Contributing
