@@ -18,7 +18,7 @@ A Model Context Protocol (MCP) server for Microsoft Data Factory and Azure Fabri
 - **Authentication**: `authenticate_interactive`, `authenticate_service_principal`, `get_authentication_status`, `get_access_token`, `sign_out`
 - **Gateway Management**: `list_gateways`, `get_gateway`
 - **Connection Management**: `list_connections`, `get_connection`
-- **Workspace Management**: `list_workspaces`, `list_workspaces_summary`
+- **Workspace Management**: `list_workspaces`
 - **Dataflow Management**: `list_dataflows`
 
 ## Quick Start
