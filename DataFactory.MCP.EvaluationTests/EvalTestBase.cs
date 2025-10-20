@@ -12,8 +12,7 @@ namespace DataFactory.MCP.EvaluationTests
         /// below.
         protected static ChatConfiguration? s_chatConfiguration;
 
-        /// All unit tests in the current sample project evaluate the LLM's response to the following question: "How far is
-        /// the planet Venus from the Earth at its closest and furthest points?".
+        /// All unit tests in the current sample project evaluate the LLM's response to Data Factory management queries.
         /// 
         /// We invoke the LLM once inside <see cref="InitializeAsync(TestContext)"/> below to get a response to this
         /// question and store this response in a static variable <see cref="s_response"/>. Each unit test in the current
@@ -22,10 +21,10 @@ namespace DataFactory.MCP.EvaluationTests
         protected static readonly IList<ChatMessage> s_messages = [
             new ChatMessage(
             ChatRole.System,
-            ""),
+            "You are a helpful Microsoft Data Factory assistant. Use the available tools to help users manage their Data Factory resources including gateways, connections, workspaces, and dataflows."),
         new ChatMessage(
             ChatRole.User,
-            "")];
+            "Can you help me understand what Data Factory resources are available in my environment? I'd like to see an overview of my gateways and connections.")];
 
         protected static ChatResponse s_response = new();
         protected static async Task InitializeAsync(TestContext _)
@@ -35,9 +34,9 @@ namespace DataFactory.MCP.EvaluationTests
             s_chatConfiguration = TestSetup.GetChatConfiguration();
             StdioClientTransport mcpClientTransport = new StdioClientTransport(new StdioClientTransportOptions
             {
-                Name = "Everything",
+                Name = "DataFactory.MCP",
                 Command = "dotnet",
-                Arguments = ["run", "--project", "./DataFactory.MCP/DataFactory.MCP.csproj"],
+                Arguments = ["run", "--project", "..\\..\\..\\..\\DataFactory.MCP\\DataFactory.MCP.csproj"],
             });
 
             var client = await McpClient.CreateAsync(mcpClientTransport);
@@ -49,8 +48,6 @@ namespace DataFactory.MCP.EvaluationTests
                     Temperature = 0.0f,
                     ResponseFormat = ChatResponseFormat.Text
                 };
-            /// Fetch the response to be evaluated and store it in a static variable <see cref="s_response" />.
-            s_response = await s_chatConfiguration.ChatClient.GetResponseAsync(s_messages, chatOptions);
         }
     }
 }
