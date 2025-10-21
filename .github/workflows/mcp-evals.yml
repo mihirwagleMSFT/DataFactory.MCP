@@ -1,6 +1,8 @@
 name: MCP Server Evaluations
 permissions:
   contents: read
+  checks: write
+  pull-requests: write
 
 on:
   push:
@@ -32,6 +34,9 @@ jobs:
       - name: Build project
         run: dotnet build DataFactory.MCP.EvaluationTests/DataFactory.MCP.EvaluationTests.csproj --no-restore --configuration Release
 
+      - name: Install code coverage tools
+        run: dotnet tool install -g dotnet-coverage
+
       - name: Run evaluation tests
         env:
           EVAL_AZURE_OPENAI_ENDPOINT: ${{ secrets.EVAL_AZURE_OPENAI_ENDPOINT }}
@@ -43,7 +48,7 @@ jobs:
             --configuration Release \
             --logger "trx;LogFileName=evaluation-results.trx" \
             --logger "console;verbosity=detailed" \
-            --collect:"XPlat Code Coverage" \
+            --collect:"Code Coverage" \
             --results-directory ./TestResults
 
       - name: Publish test results
