@@ -1,111 +1,62 @@
 name: MCP Server Evaluations
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - "DataFactory.MCP/**"
-      - "evals/**"
-      - ".github/workflows/mcp-evals.yml"
   push:
     branches: [main, dev/**]
-    paths:
-      - "DataFactory.MCP/**"
-      - "evals/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: "9.0.x"
 
 jobs:
-  build-and-evaluate:
+  evaluate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - name: Restore dependencies
+        run: dotnet restore DataFactory.MCP.sln
 
-      - name: Restore .NET dependencies
-        run: dotnet restore DataFactory.MCP/DataFactory.MCP.csproj --configfile nuget.public.config
+      - name: Build solution
+        run: dotnet build DataFactory.MCP.sln --no-restore --configuration Release
 
-      - name: Build DataFactory MCP Server
-        run: dotnet build DataFactory.MCP/DataFactory.MCP.csproj --configuration Release --no-restore
-
-      - name: Install Node.js dependencies
-        working-directory: ./evals
+      - name: Run evaluation tests
+        env:
+          EVAL_AZURE_OPENAI_ENDPOINT: ${{ secrets.EVAL_AZURE_OPENAI_ENDPOINT }}
+          EVAL_AZURE_OPENAI_API_KEY: ${{ secrets.EVAL_AZURE_OPENAI_API_KEY }}
+          EVAL_AZURE_OPENAI_MODEL: ${{ secrets.EVAL_AZURE_OPENAI_MODEL }}
         run: |
-          npm install
-          npm install -g tsx
+          dotnet test DataFactory.MCP.EvaluationTests/DataFactory.MCP.EvaluationTests.csproj \
+            --no-build \
+            --configuration Release \
+            --logger "trx;LogFileName=evaluation-results.trx" \
+            --logger "console;verbosity=detailed" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults
 
-      - name: Run Core Functionality Evaluations
-        working-directory: ./evals
-        run: |
-          echo '#!/bin/bash' > ../datafactory-mcp-server
-          echo 'dotnet ../DataFactory.MCP/bin/Release/net10.0/DataFactory.MCP.dll "$@"' >> ../datafactory-mcp-server
-          chmod +x ../datafactory-mcp-server
-          npx mcp-eval core-functionality-evals.yaml ../datafactory-mcp-server
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-      - name: Run Authentication Evaluations
-        working-directory: ./evals
-        run: npx mcp-eval authentication-evals.yaml ../datafactory-mcp-server
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-      - name: Run Workspace Evaluations
-        working-directory: ./evals
-        run: npx mcp-eval workspace-evals.yaml ../datafactory-mcp-server
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-  comprehensive-evaluation:
-    runs-on: ubuntu-latest
-    needs: build-and-evaluate
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
         with:
-          dotnet-version: "10.0.x"
+          name: Evaluation Test Results
+          path: "./TestResults/*.trx"
+          reporter: dotnet-trx
+          fail-on-error: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          node-version: "20"
-
-      - name: Restore .NET dependencies
-        run: dotnet restore DataFactory.MCP/DataFactory.MCP.csproj --configfile nuget.public.config
-
-      - name: Build DataFactory MCP Server
-        run: dotnet build DataFactory.MCP/DataFactory.MCP.csproj --configuration Release --no-restore
-
-      - name: Install Node.js dependencies
-        working-directory: ./evals
-        run: npm install
-
-      - name: Run Comprehensive Evaluations
-        working-directory: ./evals
-        run: |
-          echo '#!/bin/bash' > ../datafactory-mcp-server
-          echo 'dotnet ../DataFactory.MCP/bin/Release/net10.0/DataFactory.MCP.dll "$@"' >> ../datafactory-mcp-server
-          chmod +x ../datafactory-mcp-server
-          npx mcp-eval datafactory-mcp-evals.yaml ../datafactory-mcp-server
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          name: evaluation-test-results
+          path: ./TestResults/
+          retention-days: 30
