@@ -1,5 +1,6 @@
 name: MCP Server Evaluations
-
+permissions:
+  contents: read
 on:
   push:
     branches: [main, dev/**]
