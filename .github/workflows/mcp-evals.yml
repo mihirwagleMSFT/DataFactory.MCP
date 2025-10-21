@@ -1,6 +1,7 @@
 name: MCP Server Evaluations
 permissions:
   contents: read
+
 on:
   push:
     branches: [main, dev/**]
@@ -26,7 +27,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore DataFactory.MCP.EvaluationTests/DataFactory.MCP.EvaluationTests.csproj
+        run: dotnet restore DataFactory.MCP.EvaluationTests/DataFactory.MCP.EvaluationTests.csproj --configfile ../nuget.public.config
 
       - name: Build project
         run: dotnet build DataFactory.MCP.EvaluationTests/DataFactory.MCP.EvaluationTests.csproj --no-restore --configuration Release
