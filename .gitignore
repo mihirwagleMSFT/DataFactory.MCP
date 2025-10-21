@@ -4,3 +4,4 @@ bin/
 DataFactory.MCP.Tests/Infrastructure/.env
 *node_modules/
 *package-lock.json
+*.vs
