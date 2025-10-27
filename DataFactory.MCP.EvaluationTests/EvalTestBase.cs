@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.AI.Evaluation;
 using ModelContextProtocol.Client;
 
@@ -60,7 +60,6 @@ namespace DataFactory.MCP.EvaluationTests
             };
 
             // Get the initial response using the shared messages
-
             s_response = await s_chatConfiguration.ChatClient.GetResponseAsync(s_messages, s_chatOptions);
         }
 
@@ -75,6 +74,7 @@ namespace DataFactory.MCP.EvaluationTests
 
         /// <summary>
         /// Generic method to evaluate how well an actual response matches an expected response pattern using LLM-based evaluation.
+        /// Now internally uses the ResponseMatchEvaluator (IEvaluator) for consistency while maintaining backward compatibility.
         /// </summary>
         /// <param name="originalMessages">The original conversation messages</param>
         /// <param name="actualResponse">The actual AI response to evaluate</param>
@@ -91,89 +91,91 @@ namespace DataFactory.MCP.EvaluationTests
             string scenarioName = "Response",
             int minimumAcceptableScore = 3)
         {
-            var defaultCriteria = """
-                1. Accuracy: Did the AI correctly identify the situation and provide appropriate guidance?
-                2. Helpfulness: Did the AI provide useful information to address the user's needs?
-                3. Tone and Politeness: Is the response professional and offers assistance?
-                4. Completeness: Does the response adequately address the user's request?
-                5. Technical Correctness: Is any technical information provided accurate?
-                """;
-            var evaluationMessages = new List<ChatMessage>
+            // Use the IEvaluator internally for consistency
+            var evaluator = new ResponseMatchEvaluator();
+            var context = new ResponseMatchEvaluatorContext(
+                expectedResponsePattern,
+                evaluationCriteria,
+                scenarioName);
+
+            var result = await evaluator.EvaluateAsync(
+                originalMessages,
+                actualResponse,
+                s_chatConfiguration,
+                [context]);
+
+            // Extract the score and validate it meets minimum expectations
+            var matchScoreMetric = result.Metrics.OfType<NumericMetric>()
+                .FirstOrDefault(m => m.Name == ResponseMatchEvaluator.MatchScoreMetricName);
+
+            if (matchScoreMetric?.Value is double score)
             {
-                new ChatMessage(ChatRole.System,
-                    $"""
-                    You are an expert evaluator comparing AI assistant responses against expected patterns.
+                var intScore = (int)score;
+                Assert.IsGreaterThanOrEqualTo(minimumAcceptableScore, intScore,
+                    $"{scenarioName} should meet basic expectations. Got score: {intScore}. Explanation: {matchScoreMetric.Reason}");
 
-                    # Definitions
-                    Rate the match quality on a scale of 1-5 based on these criteria:
-                    {evaluationCriteria ?? defaultCriteria}
-
-                    ## Scoring Scale:
-                    - **5**: Excellent match - meets or exceeds expected behavior across all criteria
-                    - **4**: Good match - minor differences but meets expectations in most areas
-                    - **3**: Acceptable match - adequate handling of the scenario with some gaps
-                    - **2**: Poor match - significant gaps in expected behavior or missing key elements
-                    - **1**: Very poor match - fails to meet basic expectations or completely off-topic
-
-                    # Tasks
-                    ## Please provide your assessment Score for the AI RESPONSE in relation to the EXPECTED PATTERN based on the Definitions above. Your output should include the following information:
-                    - **ThoughtChain**: To improve the reasoning process, think step by step and include a step-by-step explanation of your thought process as you analyze the response based on the definitions. Keep it brief and start your ThoughtChain with "Let's think step by step:".
-                    - **Explanation**: a very short explanation of why you think the response should get that Score.
-                    - **Score**: based on your previous analysis, provide your Score. The Score you give MUST be an integer score (i.e., "1", "2", "3", "4", "5") based on the levels of the definitions.
-
-                    ## Please provide your answers between the tags: <S0>your chain of thoughts</S0>, <S1>your explanation</S1>, <S2>your Score</S2>.
-                    """),
-                new ChatMessage(ChatRole.User,
-                    $"""
-                    # Context
-                    **User's Original Request**: "{originalMessages.LastOrDefault()?.Text ?? "No request"}"
-                    
-                    **Expected Response Pattern**: "{expectedResponsePattern}"
-                    
-                    **Actual AI Response**: {actualResponse}
-                    
-                    # Task
-                    Evaluate how well the actual AI response matches the expected response pattern using the structured format specified in the system prompt.
-                    """)
-            };
-
-            var evaluationResponse = await s_chatConfiguration!.ChatClient.GetResponseAsync(
-                evaluationMessages,
-                new ChatOptions { Temperature = 0.1f });
-
-            var evaluationText = evaluationResponse.ToString();
-
-            // Extract the structured score from the S2 tags
-            var scoreMatch = System.Text.RegularExpressions.Regex.Match(evaluationText, @"<S2>(\d+)</S2>");
-            if (scoreMatch.Success && int.TryParse(scoreMatch.Groups[1].Value, out var score) && score >= 1 && score <= 5)
-            {
-                // Extract thought chain and explanation for better debugging/logging
-                var thoughtChainMatch = System.Text.RegularExpressions.Regex.Match(evaluationText, @"<S0>(.*?)</S0>", System.Text.RegularExpressions.RegexOptions.Singleline);
-                var explanationMatch = System.Text.RegularExpressions.Regex.Match(evaluationText, @"<S1>(.*?)</S1>", System.Text.RegularExpressions.RegexOptions.Singleline);
-
-                var thoughtChain = thoughtChainMatch.Success ? thoughtChainMatch.Groups[1].Value.Trim() : "No thought chain provided";
-                var explanation = explanationMatch.Success ? explanationMatch.Groups[1].Value.Trim() : "No explanation provided";
-
-                /// Assert that the response meets minimum expectations
-                Assert.IsGreaterThanOrEqualTo(minimumAcceptableScore, score,
-                    $"{scenarioName} should meet basic expectations. Got score: {score}. Explanation: {explanation}");
-
-                return score;
+                return intScore;
             }
 
-            // Fallback: try to extract score from the beginning of the response (legacy format)
-            if (!string.IsNullOrWhiteSpace(evaluationText) && char.IsDigit(evaluationText.FirstOrDefault()))
-            {
-                var scoreChar = evaluationText.First();
-                if (int.TryParse(scoreChar.ToString(), out var fallbackScore) && fallbackScore >= 1 && fallbackScore <= 5)
-                {
-                    Assert.IsGreaterThanOrEqualTo(minimumAcceptableScore, fallbackScore,
-                        $"{scenarioName} should meet basic expectations. Got score: {fallbackScore}");
-
-                    return fallbackScore;
-                }
-            }
             return null;
+        }
+
+        /// <summary>
+        /// Enhanced method that uses the IEvaluator pattern with ResponseMatchEvaluator.
+        /// Returns a proper EvaluationResult with structured metrics and diagnostics.
+        /// This is the recommended method for new code that needs access to detailed evaluation results.
+        /// </summary>
+        /// <param name="originalMessages">The original conversation messages</param>
+        /// <param name="actualResponse">The actual AI response to evaluate</param>
+        /// <param name="expectedResponsePattern">Description of the expected response pattern</param>
+        /// <param name="evaluationCriteria">Specific criteria for evaluation (optional, will use default if null)</param>
+        /// <param name="scenarioName">Name of the scenario being evaluated (for logging purposes)</param>
+        /// <param name="minimumAcceptableScore">Minimum score (1-5) to pass the evaluation (default: 3)</param>
+        /// <returns>The evaluation result containing the match score and metrics</returns>
+        protected static async Task<EvaluationResult> EvaluateWithIEvaluatorAsync(
+            List<ChatMessage> originalMessages,
+            ChatResponse actualResponse,
+            string expectedResponsePattern,
+            string? evaluationCriteria = null,
+            string scenarioName = "Response",
+            int minimumAcceptableScore = 3)
+        {
+            var evaluator = new ResponseMatchEvaluator();
+            var context = new ResponseMatchEvaluatorContext(
+                expectedResponsePattern,
+                evaluationCriteria,
+                scenarioName);
+
+            var result = await evaluator.EvaluateAsync(
+                originalMessages,
+                actualResponse,
+                s_chatConfiguration,
+                [context]);
+
+            // Validate the result meets minimum expectations
+            var matchScoreMetric = result.Metrics.OfType<NumericMetric>()
+                .FirstOrDefault(m => m.Name == ResponseMatchEvaluator.MatchScoreMetricName);
+
+            if (matchScoreMetric?.Value is double score)
+            {
+                Assert.IsGreaterThanOrEqualTo(minimumAcceptableScore, score,
+                    $"{scenarioName} should meet basic expectations. Got score: {score}. Explanation: {matchScoreMetric.Reason}");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Helper method to extract the numeric score from a ResponseMatchEvaluator result.
+        /// </summary>
+        /// <param name="evaluationResult">The evaluation result from ResponseMatchEvaluator</param>
+        /// <returns>The numeric score (1-5) or null if not found</returns>
+        protected static int? GetMatchScore(EvaluationResult evaluationResult)
+        {
+            var matchScoreMetric = evaluationResult.Metrics.OfType<NumericMetric>()
+                .FirstOrDefault(m => m.Name == ResponseMatchEvaluator.MatchScoreMetricName);
+
+            return matchScoreMetric?.Value is double score ? (int)score : null;
         }
     }
 }
