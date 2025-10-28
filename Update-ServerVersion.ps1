@@ -101,23 +101,30 @@ $updateCount = 0
 # Update server.json
 if (Test-Path $ServerJsonPath) {
     try {
-        $serverJson = Get-Content $ServerJsonPath -Raw | ConvertFrom-Json
+        # Read raw content and replace placeholders
+        $content = Get-Content $ServerJsonPath -Raw
+        $content = $content -replace '#{VERSION}#', $Version
+        $content = $content -replace '\$\(PackageVersion\)', $Version
         
-        # Update version fields
-        if ($serverJson.packages -and $serverJson.packages.Count -gt 0) {
-            $serverJson.packages[0].version = $Version
+        # Parse and update JSON structure for new schema
+        $serverJson = $content | ConvertFrom-Json
+        
+        # Update top-level version (new schema)
+        if ($serverJson.version) {
+            $serverJson.version = $Version
         }
         
-        if ($serverJson.version_detail) {
-            $serverJson.version_detail.version = $Version
+        # Update package version (new schema)
+        if ($serverJson.packages -and $serverJson.packages.Count -gt 0) {
+            $serverJson.packages[0].version = $Version
         }
         
         # Write back to file with proper formatting
         $serverJson | ConvertTo-Json -Depth 10 | Set-Content $ServerJsonPath -Encoding UTF8
         
         Write-Host "✓ server.json updated successfully" -ForegroundColor Green
+        Write-Host "  Top-level version: $($serverJson.version)"
         Write-Host "  Package version: $($serverJson.packages[0].version)"
-        Write-Host "  Version detail: $($serverJson.version_detail.version)"
         $updateCount++
     }
     catch {
