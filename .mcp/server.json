@@ -1,21 +1,32 @@
 {
-  "$schema": "https://modelcontextprotocol.io/schemas/draft/2025-07-09/server.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "description": "An MCP server using the MCP C# SDK for DataFactory operations.",
   "name": "io.github.microsoft/DataFactory.MCP",
+  "version": "$(PackageVersion)",
   "packages": [
     {
-      "registry_name": "nuget",
-      "name": "Microsoft.DataFactory.MCP",
-      "version": "#{VERSION}#",
-      "package_arguments": [],
-      "environment_variables": []
+      "registryType": "nuget",
+      "identifier": "Microsoft.DataFactory.MCP",
+      "version": "$(PackageVersion)",
+      "registryBaseUrl": "https://api.nuget.org",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        },
+        {
+          "type": "positional",
+          "value": "start"
+        }
+      ],
+      "environmentVariables": []
     }
   ],
   "repository": {
     "url": "https://github.com/microsoft/DataFactory.MCP",
     "source": "github"
-  },
-  "version_detail": {
-    "version": "#{VERSION}#"
   }
 }
