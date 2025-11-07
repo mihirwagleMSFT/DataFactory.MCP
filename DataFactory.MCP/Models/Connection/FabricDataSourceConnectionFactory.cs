@@ -1,7 +1,6 @@
 using DataFactory.MCP.Abstractions.Interfaces;
 using Microsoft.Extensions.Logging;
 
-#pragma warning disable CA1822 // Methods require service access
 
 namespace DataFactory.MCP.Models.Connection;
 
