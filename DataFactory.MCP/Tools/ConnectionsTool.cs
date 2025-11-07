@@ -13,7 +13,6 @@ public class ConnectionsTool
 {
     private readonly IFabricConnectionService _connectionService;
     private readonly ConnectionFactory _connectionFactory;
-    private readonly ConnectionParameterValidator _parameterValidator;
 
     public ConnectionsTool(
         IFabricConnectionService connectionService,
@@ -22,7 +21,6 @@ public class ConnectionsTool
     {
         _connectionService = connectionService;
         _connectionFactory = connectionFactory;
-        _parameterValidator = new ConnectionParameterValidator(validationService);
     }
 
     [McpServerTool, Description(@"Lists all connections the user has permission for, including on-premises, virtual network and cloud connections")]
@@ -100,10 +98,6 @@ public class ConnectionsTool
             return string.Format(Messages.ErrorRetrievingConnectionTemplate, ex.Message);
         }
     }
-
-    // =============================================================================
-    // SPECIALIZED CONNECTION CREATION TOOLS (Minimal Parameters, Maximum Clarity)
-    // =============================================================================
 
     [McpServerTool, Description(@"Creates a cloud SQL connection with basic authentication - simplified interface")]
     public async Task<string> CreateCloudSqlBasicAsync(
