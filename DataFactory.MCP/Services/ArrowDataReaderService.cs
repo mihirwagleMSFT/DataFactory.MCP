@@ -7,9 +7,9 @@ using DataFactory.MCP.Models.Dataflow;
 namespace DataFactory.MCP.Services;
 
 /// <summary>
-/// Service for reading and formatting Apache Arrow data streams
+/// Service for reading and parsing Apache Arrow data streams
 /// </summary>
-public class ArrowDataReaderService
+public static class ArrowDataReaderService
 {
     /// <summary>
     /// Reads Apache Arrow stream and extracts metadata and formatted data
