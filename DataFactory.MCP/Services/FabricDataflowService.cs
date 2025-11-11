@@ -129,4 +129,155 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 
         return url.ToString();
     }
+
+    public async Task<ExecuteDataflowQueryResponse> ExecuteQueryAsync(
+        string workspaceId,
+        string dataflowId,
+        ExecuteDataflowQueryRequest request)
+    {
+        try
+        {
+            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
+            _validationService.ValidateGuid(dataflowId, nameof(dataflowId));
+            _validationService.ValidateAndThrow(request, nameof(request));
+
+            await EnsureAuthenticationAsync();
+
+            var url = $"{BaseUrl}/workspaces/{workspaceId}/dataflows/{dataflowId}/executeQuery";
+            var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            Logger.LogInformation("Executing query '{QueryName}' on dataflow {DataflowId} in workspace {WorkspaceId}: {Url}",
+                request.QueryName, dataflowId, workspaceId, url);
+
+            var response = await HttpClient.PostAsync(url, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Read the binary response data
+                var responseData = await response.Content.ReadAsByteArrayAsync();
+                var contentType = response.Content.Headers.ContentType?.MediaType;
+                var contentLength = responseData.Length;
+
+                Logger.LogInformation("Successfully executed query '{QueryName}' on dataflow {DataflowId}. Response: {ContentLength} bytes, Content-Type: {ContentType}",
+                    request.QueryName, dataflowId, contentLength, contentType);
+
+                // Extract summary information from the Arrow data
+                var summary = ExtractArrowDataSummary(responseData);
+
+                return new ExecuteDataflowQueryResponse
+                {
+                    Data = responseData,
+                    ContentType = contentType,
+                    ContentLength = contentLength,
+                    Success = true,
+                    Summary = summary,
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "executedAt", DateTime.UtcNow },
+                        { "workspaceId", workspaceId },
+                        { "dataflowId", dataflowId },
+                        { "queryName", request.QueryName }
+                    }
+                };
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogError("Failed to execute query '{QueryName}' on dataflow {DataflowId}. Status: {StatusCode}, Content: {Content}",
+                    request.QueryName, dataflowId, response.StatusCode, errorContent);
+
+                return new ExecuteDataflowQueryResponse
+                {
+                    Success = false,
+                    Error = $"Query execution failed: {response.StatusCode} - {errorContent}",
+                    ContentLength = 0
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error executing query '{QueryName}' on dataflow {DataflowId} in workspace {WorkspaceId}",
+                request?.QueryName, dataflowId, workspaceId);
+
+            return new ExecuteDataflowQueryResponse
+            {
+                Success = false,
+                Error = $"Query execution error: {ex.Message}",
+                ContentLength = 0
+            };
+        }
+    }
+
+    private static QueryResultSummary ExtractArrowDataSummary(byte[] arrowData)
+    {
+        var summary = new QueryResultSummary();
+
+        try
+        {
+            // Convert bytes to string to look for readable patterns
+            var stringContent = System.Text.Encoding.UTF8.GetString(arrowData);
+
+            // Look for common column names
+            var columns = new List<string>();
+            var commonColumns = new[] { "RoleInstance", "ProcessName", "Message", "Timestamp", "Level" };
+            foreach (var column in commonColumns)
+            {
+                if (stringContent.Contains(column))
+                {
+                    columns.Add(column);
+                }
+            }
+            summary.Columns = columns;
+
+            // Extract sample data
+            var sampleData = new Dictionary<string, List<string>>();
+
+            // Look for role instances
+            var rolePattern = @"vmback_\d+";
+            var roleMatches = System.Text.RegularExpressions.Regex.Matches(stringContent, rolePattern);
+            if (roleMatches.Count > 0)
+            {
+                sampleData["RoleInstance"] = roleMatches.Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => m.Value).Distinct().Take(3).ToList();
+            }
+
+            // Look for service names
+            var servicePattern = @"Microsoft\.Mashup\.Web\.[A-Za-z.]+";
+            var serviceMatches = System.Text.RegularExpressions.Regex.Matches(stringContent, servicePattern);
+            if (serviceMatches.Count > 0)
+            {
+                sampleData["ProcessName"] = serviceMatches.Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => m.Value).Distinct().Take(3).ToList();
+            }
+
+            // Look for common error messages
+            var errorMessages = new[] { "Invalid workload hostname", "DataSource requested unhandled application property", "A generic MashupException was caught" };
+            var foundMessages = errorMessages.Where(msg => stringContent.Contains(msg)).Take(3).ToList();
+            if (foundMessages.Any())
+            {
+                sampleData["Message"] = foundMessages;
+            }
+
+            summary.SampleData = sampleData;
+
+            // Rough estimate of row count based on pattern matches
+            var estimatedRows = Math.Max(roleMatches.Count, serviceMatches.Count);
+            if (estimatedRows > 0)
+            {
+                summary.EstimatedRowCount = Math.Min(estimatedRows, 1000); // Cap at reasonable number
+            }
+        }
+        catch (Exception ex)
+        {
+            // If extraction fails, just return basic summary
+            summary.Columns = new List<string> { "Data extraction failed" };
+            summary.SampleData = new Dictionary<string, List<string>>
+            {
+                { "Error", new List<string> { ex.Message } }
+            };
+        }
+
+        return summary;
+    }
 }

@@ -129,4 +129,79 @@ public class DataflowTool
             return $"Error creating dataflow: {ex.Message}";
         }
     }
+
+    [McpServerTool, Description(@"Executes a query against a dataflow and returns the results in Apache Arrow format. This allows you to run M (Power Query) language queries against data sources connected through the dataflow.")]
+    public async Task<string> ExecuteQueryAsync(
+        [Description("The workspace ID containing the dataflow (required)")] string workspaceId,
+        [Description("The dataflow ID to execute the query against (required)")] string dataflowId,
+        [Description("The name of the query to execute (required)")] string queryName,
+        [Description("The M (Power Query) language query to execute. This should be a complete M expression that defines the data transformation and source connection.")] string customMashupDocument)
+    {
+        try
+        {
+            var request = new ExecuteDataflowQueryRequest
+            {
+                QueryName = queryName,
+                CustomMashupDocument = customMashupDocument
+            };
+
+            var response = await _dataflowService.ExecuteQueryAsync(workspaceId, dataflowId, request);
+
+            if (response.Success)
+            {
+                var result = new
+                {
+                    Success = true,
+                    Message = $"Query '{queryName}' executed successfully on dataflow {dataflowId}",
+                    DataFormat = "Apache Arrow Binary",
+                    ContentType = response.ContentType,
+                    ContentLength = response.ContentLength,
+                    Summary = response.Summary,
+                    Metadata = response.Metadata,
+                    ExecutedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    Note = "The response contains Apache Arrow binary data. Use appropriate tools (like Apache Arrow libraries, Power BI, or data analysis tools) to parse and analyze the structured results."
+                };
+
+                return JsonSerializer.Serialize(result, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+            else
+            {
+                var errorResult = new
+                {
+                    Success = false,
+                    Error = response.Error,
+                    Message = $"Failed to execute query '{queryName}' on dataflow {dataflowId}",
+                    WorkspaceId = workspaceId,
+                    DataflowId = dataflowId,
+                    QueryName = queryName
+                };
+
+                return JsonSerializer.Serialize(errorResult, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            return $"Error: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+        }
+        catch (HttpRequestException ex)
+        {
+            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return $"Error executing dataflow query: {ex.Message}";
+        }
+    }
 }
