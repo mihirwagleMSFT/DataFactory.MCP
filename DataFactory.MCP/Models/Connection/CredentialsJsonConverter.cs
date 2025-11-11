@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DataFactory.MCP.Models.Connection.Create.Credentials;
 
 namespace DataFactory.MCP.Models.Connection;
 

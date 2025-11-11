@@ -1,6 +1,7 @@
 using DataFactory.MCP.Abstractions;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Dataflow.Query;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
@@ -13,14 +14,17 @@ namespace DataFactory.MCP.Services;
 public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 {
     private readonly IValidationService _validationService;
+    private readonly IArrowDataReaderService _arrowDataReaderService;
 
     public FabricDataflowService(
         ILogger<FabricDataflowService> logger,
         IAuthenticationService authService,
-        IValidationService validationService)
+        IValidationService validationService,
+        IArrowDataReaderService arrowDataReaderService)
         : base(logger, authService)
     {
         _validationService = validationService;
+        _arrowDataReaderService = arrowDataReaderService;
     }
 
     public async Task<ListDataflowsResponse> ListDataflowsAsync(
@@ -211,10 +215,10 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 
 
 
-    private static QueryResultSummary ExtractArrowDataSummary(byte[] arrowData)
+    private QueryResultSummary ExtractArrowDataSummary(byte[] arrowData)
     {
         // Use the enhanced Arrow reader service with full data retrieval
-        var arrowInfo = ArrowDataReaderService.ReadArrowStream(arrowData, returnAllData: true);
+        var arrowInfo = _arrowDataReaderService.ReadArrowStreamAsync(arrowData, returnAllData: true).Result;
 
         var summary = new QueryResultSummary
         {

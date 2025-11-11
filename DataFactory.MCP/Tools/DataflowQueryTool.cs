@@ -2,7 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
-using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Dataflow.Query;
 
 namespace DataFactory.MCP.Tools;
 

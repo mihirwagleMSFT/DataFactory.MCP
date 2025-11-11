@@ -1,4 +1,5 @@
 using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Dataflow.Query;
 
 namespace DataFactory.MCP.Abstractions.Interfaces;
 

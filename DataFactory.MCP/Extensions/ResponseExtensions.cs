@@ -1,6 +1,6 @@
 using DataFactory.MCP.Models;
 using DataFactory.MCP.Models.Connection;
-using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Dataflow.Query;
 
 namespace DataFactory.MCP.Extensions;
 

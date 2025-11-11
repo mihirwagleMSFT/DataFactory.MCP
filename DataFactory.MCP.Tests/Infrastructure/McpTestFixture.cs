@@ -50,6 +50,7 @@ public class McpTestFixture : IDisposable
                 // Register services
                 services.AddScoped<IValidationService, ValidationService>();
                 services.AddScoped<IAuthenticationService, AuthenticationService>();
+                services.AddScoped<IArrowDataReaderService, ArrowDataReaderService>();
                 services.AddScoped<IFabricGatewayService, FabricGatewayService>();
                 services.AddScoped<IFabricConnectionService, FabricConnectionService>();
                 services.AddScoped<IFabricWorkspaceService, FabricWorkspaceService>();

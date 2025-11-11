@@ -1,170 +1,144 @@
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
+using DataFactory.MCP.Abstractions.Interfaces;
+using DataFactory.MCP.Models.Arrow;
+using Microsoft.Extensions.Logging;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace DataFactory.MCP.Services;
 
 /// <summary>
 /// Service for reading and parsing Apache Arrow data streams
 /// </summary>
-public static class ArrowDataReaderService
+public class ArrowDataReaderService : IArrowDataReaderService
 {
+    private const int MaxSampleSize = 10;
+    private const int BatchSampleSize = 5;
+    private const int MaxEstimatedRows = 1000;
+    private static readonly string[] CommonColumns = { "RoleInstance", "ProcessName", "Message", "Timestamp", "Level", "Id" };
+    private static readonly string[] CommonErrorMessages = {
+        "Invalid workload hostname",
+        "DataSource requested unhandled application property",
+        "A generic MashupException was caught",
+        "Unable to create a provider context"
+    };
+
+    private readonly ILogger<ArrowDataReaderService> _logger;
+
+    public ArrowDataReaderService(ILogger<ArrowDataReaderService> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>
     /// Reads Apache Arrow stream and extracts metadata and formatted data
     /// </summary>
     /// <param name="arrowData">The Apache Arrow binary data</param>
     /// <param name="returnAllData">If true, returns all data; if false, returns sample data only</param>
     /// <returns>Formatted Arrow data information</returns>
-    public static ArrowDataInfo ReadArrowStream(byte[] arrowData, bool returnAllData = false)
+    public Task<ArrowDataInfo> ReadArrowStreamAsync(byte[] arrowData, bool returnAllData = false)
     {
-        var info = new ArrowDataInfo();
+        return Task.Run(() => ReadArrowStream(arrowData, returnAllData));
+    }
 
+    /// <summary>
+    /// Reads Apache Arrow stream and extracts metadata and formatted data (synchronous version)
+    /// </summary>
+    /// <param name="arrowData">The Apache Arrow binary data</param>
+    /// <param name="returnAllData">If true, returns all data; if false, returns sample data only</param>
+    /// <returns>Formatted Arrow data information</returns>
+    public ArrowDataInfo ReadArrowStream(byte[] arrowData, bool returnAllData = false)
+    {
         try
         {
-            using var stream = new MemoryStream(arrowData);
-            using var reader = new ArrowStreamReader(stream);
-
-            // Read schema first
-            var schema = reader.Schema;
-            if (schema != null)
-            {
-                info.Schema = ExtractSchemaInfo(schema);
-            }
-
-            // Read all record batches
-            var allRecords = new List<RecordBatch>();
-            RecordBatch? recordBatch;
-
-            while ((recordBatch = reader.ReadNextRecordBatch()) != null)
-            {
-                allRecords.Add(recordBatch);
-                info.TotalRows += recordBatch.Length;
-            }
-
-            // Extract data based on returnAllData parameter
-            if (returnAllData)
-            {
-                info.AllData = ExtractAllData(allRecords, info.Schema?.Columns);
-            }
-            else
-            {
-                info.SampleData = ExtractSampleData(allRecords.Take(3), info.Schema?.Columns);
-            }
-
-            info.BatchCount = allRecords.Count;
-            info.Success = true;
+            _logger.LogDebug("Starting Arrow stream processing for {DataSize} bytes", arrowData.Length);
+            return ProcessArrowStream(arrowData, returnAllData);
         }
         catch (Exception ex)
         {
-            // Fallback to basic text extraction
-            info = ExtractBasicInfo(arrowData, ex);
+            _logger.LogWarning(ex, "Arrow parsing failed, falling back to text extraction");
+            return ExtractBasicInfo(arrowData, ex);
         }
+    }
 
+    private ArrowDataInfo ProcessArrowStream(byte[] arrowData, bool returnAllData)
+    {
+        using var stream = new MemoryStream(arrowData);
+        using var reader = new ArrowStreamReader(stream);
+
+        var info = new ArrowDataInfo
+        {
+            Schema = reader.Schema != null ? ExtractSchemaInfo(reader.Schema) : null,
+            Success = true
+        };
+
+        var batches = ReadAllBatches(reader, info);
+        _logger.LogDebug("Read {BatchCount} batches with total {TotalRows} rows", batches.Count, info.TotalRows);
+
+        if (returnAllData)
+            info.AllData = ExtractAllData(batches, info.Schema?.Columns);
+        else
+            info.SampleData = ExtractSampleData(batches, info.Schema?.Columns);
+
+        info.BatchCount = batches.Count;
         return info;
     }
 
-    private static ArrowSchemaInfo ExtractSchemaInfo(Schema schema)
+    private static List<RecordBatch> ReadAllBatches(ArrowStreamReader reader, ArrowDataInfo info)
     {
-        var schemaInfo = new ArrowSchemaInfo
+        var batches = new List<RecordBatch>();
+        while (reader.ReadNextRecordBatch() is { } batch)
         {
-            FieldCount = schema.FieldsList.Count,
-            Columns = new List<ArrowColumnInfo>()
-        };
-
-        foreach (var field in schema.FieldsList)
-        {
-            schemaInfo.Columns.Add(new ArrowColumnInfo
-            {
-                Name = field.Name,
-                DataType = field.DataType.TypeId.ToString(),
-                IsNullable = field.IsNullable,
-                Metadata = field.Metadata?.Keys.ToDictionary(k => k, k => field.Metadata[k]) ?? new Dictionary<string, string>()
-            });
+            batches.Add(batch);
+            info.TotalRows += batch.Length;
         }
-
-        return schemaInfo;
+        return batches;
     }
 
-    private static Dictionary<string, List<object>> ExtractAllData(IEnumerable<RecordBatch> batches, List<ArrowColumnInfo>? columns)
+    private static ArrowSchemaInfo ExtractSchemaInfo(Schema schema) => new()
     {
-        var allData = new Dictionary<string, List<object>>();
-
-        if (columns == null) return allData;
-
-        foreach (var column in columns)
+        FieldCount = schema.FieldsList.Count,
+        Columns = schema.FieldsList.Select(field => new ArrowColumnInfo
         {
-            allData[column.Name] = new List<object>();
-        }
+            Name = field.Name,
+            DataType = field.DataType.TypeId.ToString(),
+            IsNullable = field.IsNullable,
+            Metadata = field.Metadata?.Keys.ToDictionary(k => k, k => field.Metadata[k]) ?? []
+        }).ToList()
+    };
+
+    private static Dictionary<string, List<object>> ExtractAllData(List<RecordBatch> batches, List<ArrowColumnInfo>? columns)
+    {
+        if (columns == null) return [];
+
+        var allData = columns.ToDictionary(col => col.Name, _ => new List<object>());
 
         foreach (var batch in batches)
         {
-            for (int colIndex = 0; colIndex < batch.ColumnCount && colIndex < columns.Count; colIndex++)
-            {
-                var column = batch.Column(colIndex);
-                var columnName = columns[colIndex].Name;
-
-                // Extract ALL values from this batch
-                for (int rowIndex = 0; rowIndex < column.Length; rowIndex++)
-                {
-                    try
-                    {
-                        var value = ExtractValueFromArray(column, rowIndex);
-                        allData[columnName].Add(value ?? "");
-                    }
-                    catch
-                    {
-                        allData[columnName].Add(""); // Add empty string for problematic values
-                    }
-                }
-            }
+            ExtractBatchData(batch, columns, allData, batch.Length);
         }
 
         return allData;
     }
 
-    private static Dictionary<string, List<object>> ExtractSampleData(IEnumerable<RecordBatch> batches, List<ArrowColumnInfo>? columns)
+    private static Dictionary<string, List<object>> ExtractSampleData(List<RecordBatch> batches, List<ArrowColumnInfo>? columns)
     {
-        var sampleData = new Dictionary<string, List<object>>();
+        if (columns == null) return [];
 
-        if (columns == null) return sampleData;
+        var sampleData = columns.ToDictionary(col => col.Name, _ => new List<object>());
 
-        foreach (var column in columns)
+        foreach (var batch in batches.Take(3))
         {
-            sampleData[column.Name] = new List<object>();
-        }
+            var sampleCount = Math.Min(BatchSampleSize, batch.Length);
+            ExtractBatchData(batch, columns, sampleData, sampleCount);
 
-        foreach (var batch in batches)
-        {
-            for (int colIndex = 0; colIndex < batch.ColumnCount && colIndex < columns.Count; colIndex++)
+            // Limit total samples per column
+            foreach (var col in columns)
             {
-                var column = batch.Column(colIndex);
-                var columnName = columns[colIndex].Name;
-                var values = new List<object>();
-
-                // Extract up to 5 sample values per batch
-                var sampleCount = Math.Min(5, column.Length);
-                for (int rowIndex = 0; rowIndex < sampleCount; rowIndex++)
+                if (sampleData[col.Name].Count > MaxSampleSize)
                 {
-                    try
-                    {
-                        var value = ExtractValueFromArray(column, rowIndex);
-                        if (value != null)
-                        {
-                            values.Add(value);
-                        }
-                    }
-                    catch
-                    {
-                        // Skip problematic values
-                    }
-                }
-
-                sampleData[columnName].AddRange(values);
-
-                // Limit total samples per column
-                if (sampleData[columnName].Count > 10)
-                {
-                    sampleData[columnName] = sampleData[columnName].Take(10).ToList();
+                    sampleData[col.Name] = sampleData[col.Name].Take(MaxSampleSize).ToList();
                 }
             }
         }
@@ -172,62 +146,60 @@ public static class ArrowDataReaderService
         return sampleData;
     }
 
-    private static object? ExtractValueFromArray(IArrowArray array, int index)
+    private static void ExtractBatchData(RecordBatch batch, List<ArrowColumnInfo> columns, Dictionary<string, List<object>> data, int rowLimit)
     {
-        if (array.IsNull(index)) return null;
-
-        return array switch
+        for (int colIndex = 0; colIndex < Math.Min(batch.ColumnCount, columns.Count); colIndex++)
         {
-            StringArray stringArray => stringArray.GetString(index),
-            Int32Array int32Array => int32Array.GetValue(index),
-            Int64Array int64Array => int64Array.GetValue(index),
-            DoubleArray doubleArray => doubleArray.GetValue(index),
-            BooleanArray boolArray => boolArray.GetValue(index),
-            TimestampArray timestampArray => timestampArray.GetTimestamp(index)?.ToString("yyyy-MM-dd HH:mm:ss"),
-            Decimal128Array decimal128Array => decimal128Array.GetValue(index)?.ToString(),
-            FloatArray floatArray => floatArray.GetValue(index),
-            _ => $"[{array.GetType().Name}] - value at index {index}"
-        };
+            var column = batch.Column(colIndex);
+            var columnName = columns[colIndex].Name;
+
+            for (int rowIndex = 0; rowIndex < Math.Min(rowLimit, column.Length); rowIndex++)
+            {
+                try
+                {
+                    var value = ExtractValueFromArray(column, rowIndex);
+                    data[columnName].Add(value ?? "");
+                }
+                catch
+                {
+                    data[columnName].Add("");
+                }
+            }
+        }
     }
 
-    private static ArrowDataInfo ExtractBasicInfo(byte[] arrowData, Exception? ex = null)
+    private static object? ExtractValueFromArray(IArrowArray array, int index) =>
+        array.IsNull(index) ? null : array switch
+        {
+            StringArray str => str.GetString(index),
+            Int32Array i32 => i32.GetValue(index),
+            Int64Array i64 => i64.GetValue(index),
+            DoubleArray dbl => dbl.GetValue(index),
+            BooleanArray bln => bln.GetValue(index),
+            TimestampArray ts => ts.GetTimestamp(index)?.ToString("yyyy-MM-dd HH:mm:ss"),
+            Decimal128Array dec => dec.GetValue(index)?.ToString(),
+            FloatArray flt => flt.GetValue(index),
+            _ => $"[{array.GetType().Name}] - value at index {index}"
+        };
+
+    private ArrowDataInfo ExtractBasicInfo(byte[] arrowData, Exception? ex = null)
     {
         var info = new ArrowDataInfo
         {
             Success = false,
             Error = ex?.Message,
-            Schema = new ArrowSchemaInfo { Columns = new List<ArrowColumnInfo>() },
-            SampleData = new Dictionary<string, List<object>>()
+            Schema = new ArrowSchemaInfo { Columns = [] },
+            SampleData = []
         };
 
         try
         {
-            // Fallback to text-based extraction as before
-            var stringContent = Encoding.UTF8.GetString(arrowData);
-
-            // Look for common column patterns
-            var detectedColumns = new List<string>();
-            var commonColumns = new[] { "RoleInstance", "ProcessName", "Message", "Timestamp", "Level", "Id" };
-
-            foreach (var column in commonColumns)
-            {
-                if (stringContent.Contains(column))
-                {
-                    detectedColumns.Add(column);
-                    info.Schema.Columns.Add(new ArrowColumnInfo
-                    {
-                        Name = column,
-                        DataType = "String",
-                        IsNullable = true
-                    });
-                }
-            }
-
-            // Extract sample data using regex patterns
-            ExtractSampleDataFromText(stringContent, info.SampleData);
+            var content = Encoding.UTF8.GetString(arrowData);
+            var detectedColumns = DetectColumnsFromText(content, info.Schema.Columns);
+            ExtractSampleDataFromText(content, info.SampleData);
 
             info.Schema.FieldCount = detectedColumns.Count;
-            info.TotalRows = EstimateRowCount(stringContent);
+            info.TotalRows = EstimateRowCount(content);
         }
         catch (Exception extractEx)
         {
@@ -237,80 +209,52 @@ public static class ArrowDataReaderService
         return info;
     }
 
+    private static List<string> DetectColumnsFromText(string content, List<ArrowColumnInfo> columns)
+    {
+        var detected = new List<string>();
+
+        foreach (var column in CommonColumns.Where(content.Contains))
+        {
+            detected.Add(column);
+            columns.Add(new ArrowColumnInfo
+            {
+                Name = column,
+                DataType = "String",
+                IsNullable = true
+            });
+        }
+
+        return detected;
+    }
+
     private static void ExtractSampleDataFromText(string content, Dictionary<string, List<object>> sampleData)
     {
-        // Extract RoleInstance values
-        var rolePattern = @"vmback_\d+";
-        var roleMatches = System.Text.RegularExpressions.Regex.Matches(content, rolePattern);
-        if (roleMatches.Count > 0)
-        {
-            sampleData["RoleInstance"] = roleMatches.Cast<System.Text.RegularExpressions.Match>()
-                .Select(m => (object)m.Value).Distinct().Take(5).ToList();
-        }
+        ExtractPatternMatches(content, sampleData, "RoleInstance", @"vmback_\d+");
+        ExtractPatternMatches(content, sampleData, "ProcessName", @"Microsoft\.Mashup\.Web\.[A-Za-z.]+");
 
-        // Extract ProcessName values
-        var servicePattern = @"Microsoft\.Mashup\.Web\.[A-Za-z.]+";
-        var serviceMatches = System.Text.RegularExpressions.Regex.Matches(content, servicePattern);
-        if (serviceMatches.Count > 0)
-        {
-            sampleData["ProcessName"] = serviceMatches.Cast<System.Text.RegularExpressions.Match>()
-                .Select(m => (object)m.Value).Distinct().Take(5).ToList();
-        }
-
-        // Extract common error messages
-        var errorMessages = new[] {
-            "Invalid workload hostname",
-            "DataSource requested unhandled application property",
-            "A generic MashupException was caught",
-            "Unable to create a provider context"
-        };
-
-        var foundMessages = errorMessages.Where(msg => content.Contains(msg)).Take(5).ToList();
-        if (foundMessages.Any())
+        var foundMessages = CommonErrorMessages.Where(content.Contains).Take(5).ToList();
+        if (foundMessages.Count != 0)
         {
             sampleData["Message"] = foundMessages.Cast<object>().ToList();
         }
     }
 
+    private static void ExtractPatternMatches(string content, Dictionary<string, List<object>> sampleData, string key, string pattern)
+    {
+        var matches = Regex.Matches(content, pattern);
+        if (matches.Count > 0)
+        {
+            sampleData[key] = matches.Cast<Match>()
+                .Select(m => (object)m.Value)
+                .Distinct()
+                .Take(5)
+                .ToList();
+        }
+    }
+
     private static int EstimateRowCount(string content)
     {
-        // Simple heuristic based on common patterns
-        var rolePattern = @"vmback_\d+";
-        var roleMatches = System.Text.RegularExpressions.Regex.Matches(content, rolePattern);
-        return Math.Min(roleMatches.Count, 1000); // Cap at reasonable number
+        var matches = Regex.Matches(content, @"vmback_\d+");
+        return Math.Min(matches.Count, MaxEstimatedRows);
     }
-}
-
-/// <summary>
-/// Information extracted from Apache Arrow data
-/// </summary>
-public class ArrowDataInfo
-{
-    public bool Success { get; set; }
-    public string? Error { get; set; }
-    public ArrowSchemaInfo? Schema { get; set; }
-    public Dictionary<string, List<object>>? SampleData { get; set; }
-    public Dictionary<string, List<object>>? AllData { get; set; }
-    public int TotalRows { get; set; }
-    public int BatchCount { get; set; }
-}
-
-/// <summary>
-/// Apache Arrow schema information
-/// </summary>
-public class ArrowSchemaInfo
-{
-    public int FieldCount { get; set; }
-    public List<ArrowColumnInfo>? Columns { get; set; }
-}
-
-/// <summary>
-/// Information about an Arrow column
-/// </summary>
-public class ArrowColumnInfo
-{
-    public string Name { get; set; } = string.Empty;
-    public string DataType { get; set; } = string.Empty;
-    public bool IsNullable { get; set; }
-    public Dictionary<string, string> Metadata { get; set; } = new();
 }
