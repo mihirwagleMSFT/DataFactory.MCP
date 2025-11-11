@@ -235,40 +235,7 @@ public static class ArrowDataExtensions
                 ExecutionMetadata = response.Metadata
             },
 
-            ArrowData = arrowSummary,
-
-            UsageGuidelines = new
-            {
-                RecommendedTools = new[]
-                {
-                    "Apache Arrow libraries (.NET, Python, Java, etc.)",
-                    "Power BI for business intelligence",
-                    "Apache Spark for large-scale data processing",
-                    "Pandas with PyArrow for Python data analysis",
-                    "DuckDB for SQL queries on Arrow data"
-                },
-
-                ExampleUsage = new
-                {
-                    DotNet = "Use Apache.Arrow NuGet package to read the binary data",
-                    Python = "Use pyarrow.ipc.open_stream() to read the Arrow stream",
-                    PowerBI = "Import directly as Arrow data source",
-                    SQL = "Use DuckDB to query Arrow data with standard SQL"
-                }
-            },
-
-            TechnicalDetails = new
-            {
-                Format = "Apache Arrow Columnar Format",
-                Specification = "https://arrow.apache.org/docs/format/Columnar.html",
-                Benefits = new[]
-                {
-                    "Efficient columnar storage format",
-                    "Zero-copy data sharing between systems",
-                    "Language-agnostic data exchange",
-                    "Optimized for analytics workloads"
-                }
-            }
+            ArrowData = arrowSummary
         };
     }
 
