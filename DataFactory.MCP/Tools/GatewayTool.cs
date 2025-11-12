@@ -68,7 +68,7 @@ public class GatewayTool
 
             if (gateway == null)
             {
-                return string.Format(Messages.GatewayNotFoundTemplate, gatewayId);
+                return ResponseExtensions.ToNotFoundError("Gateway", gatewayId).ToMcpJson();
             }
 
             var result = gateway.ToFormattedInfo();
@@ -77,6 +77,10 @@ public class GatewayTool
         catch (UnauthorizedAccessException ex)
         {
             return ex.ToAuthenticationError().ToMcpJson();
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.ToValidationError().ToMcpJson();
         }
         catch (Exception ex)
         {

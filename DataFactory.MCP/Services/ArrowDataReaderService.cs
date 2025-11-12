@@ -3,7 +3,6 @@ using Apache.Arrow.Ipc;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Models.Arrow;
 using Microsoft.Extensions.Logging;
-using System.Text;
 
 namespace DataFactory.MCP.Services;
 

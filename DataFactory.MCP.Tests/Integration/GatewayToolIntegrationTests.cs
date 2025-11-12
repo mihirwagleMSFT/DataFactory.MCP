@@ -46,15 +46,15 @@ public class GatewayToolIntegrationTests : FabricToolIntegrationTestBase
     {
         // Test empty string
         var result1 = await _gatewayTool.GetGatewayAsync("");
-        Assert.Contains(Messages.GatewayIdRequired, result1);
+        McpResponseAssertHelper.AssertValidationError(result1, Messages.InvalidParameterEmpty("gatewayId"));
 
         // Test whitespace
         var result2 = await _gatewayTool.GetGatewayAsync("   ");
-        Assert.Contains(Messages.GatewayIdRequired, result2);
+        McpResponseAssertHelper.AssertValidationError(result2, Messages.InvalidParameterEmpty("gatewayId"));
 
         // Test null (will be handled by method signature, but let's test if it gets to validation)
         var result3 = await _gatewayTool.GetGatewayAsync(null!);
-        Assert.Contains(Messages.GatewayIdRequired, result3);
+        McpResponseAssertHelper.AssertValidationError(result3, Messages.InvalidParameterEmpty("gatewayId"));
     }
 
     [SkippableFact]

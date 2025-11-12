@@ -61,8 +61,7 @@ public class ConnectionsToolIntegrationTests : FabricToolIntegrationTestBase
         var result = await _connectionsTool.GetConnectionAsync("");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(Messages.ConnectionIdRequired, result);
+        McpResponseAssertHelper.AssertValidationError(result, Messages.InvalidParameterEmpty("connectionId"));
     }
 
     [Fact]

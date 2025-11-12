@@ -142,15 +142,8 @@ public static class Messages
     /// </summary>
     public const string InvalidParameterClientSecretEmpty = "Invalid parameter: clientSecret cannot be empty";
 
-    /// <summary>
-    /// Message when connection ID is required
-    /// </summary>
-    public const string ConnectionIdRequired = "Connection ID is required.";
+    public static string InvalidParameterEmpty(string parameterName) => $"{parameterName} is required and cannot be empty";
 
-    /// <summary>
-    /// Message when gateway ID is required
-    /// </summary>
-    public const string GatewayIdRequired = "Gateway ID is required.";
     #endregion
 
     #region Not Found Messages
