@@ -21,73 +21,70 @@ public class ArrowDataReaderService : IArrowDataReaderService
     /// <summary>
     /// Reads Apache Arrow stream and creates query result summary directly
     /// </summary>
-    public Task<QueryResultSummary> ReadArrowStreamAsync(byte[] arrowData)
+    public async Task<QueryResultSummary> ReadArrowStreamAsync(byte[] arrowData)
     {
-        return Task.Run(() =>
+        try
         {
-            try
+            using var stream = new MemoryStream(arrowData);
+            using var reader = new ArrowStreamReader(stream);
+
+            var columns = reader.Schema?.FieldsList.Select(f => f.Name).ToList() ?? new List<string>();
+            var allData = new Dictionary<string, List<object>>();
+            var totalRows = 0;
+            var batchCount = 0;
+
+            // Initialize data structure
+            foreach (var col in columns)
+                allData[col] = new List<object>();
+
+            // Read all batches
+            while (reader.ReadNextRecordBatch() is { } batch)
             {
-                using var stream = new MemoryStream(arrowData);
-                using var reader = new ArrowStreamReader(stream);
+                batchCount++;
+                totalRows += batch.Length;
 
-                var columns = reader.Schema?.FieldsList.Select(f => f.Name).ToList() ?? new List<string>();
-                var allData = new Dictionary<string, List<object>>();
-                var totalRows = 0;
-                var batchCount = 0;
-
-                // Initialize data structure
-                foreach (var col in columns)
-                    allData[col] = new List<object>();
-
-                // Read all batches
-                while (reader.ReadNextRecordBatch() is { } batch)
+                for (int colIndex = 0; colIndex < Math.Min(batch.ColumnCount, columns.Count); colIndex++)
                 {
-                    batchCount++;
-                    totalRows += batch.Length;
+                    var column = batch.Column(colIndex);
+                    var columnName = columns[colIndex];
 
-                    for (int colIndex = 0; colIndex < Math.Min(batch.ColumnCount, columns.Count); colIndex++)
+                    for (int rowIndex = 0; rowIndex < batch.Length; rowIndex++)
                     {
-                        var column = batch.Column(colIndex);
-                        var columnName = columns[colIndex];
-
-                        for (int rowIndex = 0; rowIndex < batch.Length; rowIndex++)
+                        try
                         {
-                            try
-                            {
-                                var value = ExtractValueFromArray(column, rowIndex);
-                                allData[columnName].Add(value ?? "");
-                            }
-                            catch
-                            {
-                                allData[columnName].Add("");
-                            }
+                            var value = ExtractValueFromArray(column, rowIndex);
+                            allData[columnName].Add(value ?? "");
+                        }
+                        catch
+                        {
+                            allData[columnName].Add("");
                         }
                     }
                 }
+            }
 
-                return new QueryResultSummary
-                {
-                    ArrowParsingSuccess = true,
-                    Columns = columns,
-                    EstimatedRowCount = totalRows,
-                    BatchCount = batchCount,
-                    StructuredSampleData = allData
-                };
-            }
-            catch (Exception ex)
+            return new QueryResultSummary
             {
-                _logger.LogWarning(ex, "Arrow parsing failed");
-                return new QueryResultSummary
-                {
-                    ArrowParsingSuccess = false,
-                    ArrowParsingError = ex.Message,
-                    Columns = new List<string>(),
-                    EstimatedRowCount = 0,
-                    BatchCount = 0,
-                    StructuredSampleData = new Dictionary<string, List<object>>()
-                };
-            }
-        });
+                ArrowParsingSuccess = true,
+                Columns = columns,
+                EstimatedRowCount = totalRows,
+                BatchCount = batchCount,
+                StructuredSampleData = allData
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Arrow parsing failed");
+            return new QueryResultSummary
+            {
+                ArrowParsingSuccess = false,
+                ArrowParsingError = ex.Message,
+                Columns = new List<string>(),
+                EstimatedRowCount = 0,
+                BatchCount = 0,
+                StructuredSampleData = new Dictionary<string, List<object>>()
+            };
+        }
     }
 
     private static object? ExtractValueFromArray(IArrowArray array, int index) =>
