@@ -167,9 +167,8 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
                 Logger.LogInformation("Successfully executed query '{QueryName}' on dataflow {DataflowId}. Response: {ContentLength} bytes, Content-Type: {ContentType}",
                     request.QueryName, dataflowId, contentLength, contentType);
 
-                // Extract summary information from the Arrow data using the enhanced reader
-                var arrowInfo = await _arrowDataReaderService.ReadArrowStreamAsync(responseData);
-                var summary = arrowInfo.ToQueryResultSummary();
+                // Extract data from Arrow stream directly to final format
+                var summary = await _arrowDataReaderService.ReadArrowStreamAsync(responseData);
 
                 return new ExecuteDataflowQueryResponse
                 {

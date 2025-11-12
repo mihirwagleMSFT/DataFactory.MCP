@@ -1,7 +1,7 @@
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
 using DataFactory.MCP.Abstractions.Interfaces;
-using DataFactory.MCP.Models.Arrow;
+using DataFactory.MCP.Models.Dataflow.Query;
 using Microsoft.Extensions.Logging;
 
 namespace DataFactory.MCP.Services;
@@ -19,112 +19,75 @@ public class ArrowDataReaderService : IArrowDataReaderService
     }
 
     /// <summary>
-    /// Reads Apache Arrow stream and extracts metadata and formatted data
+    /// Reads Apache Arrow stream and creates query result summary directly
     /// </summary>
-    /// <param name="arrowData">The Apache Arrow binary data</param>
-    /// <returns>Formatted Arrow data information</returns>
-    public Task<ArrowDataInfo> ReadArrowStreamAsync(byte[] arrowData)
+    public Task<QueryResultSummary> ReadArrowStreamAsync(byte[] arrowData)
     {
-        return Task.Run(() => ReadArrowStream(arrowData));
-    }
-
-    /// <summary>
-    /// Reads Apache Arrow stream and extracts metadata and formatted data (synchronous version)
-    /// </summary>
-    /// <param name="arrowData">The Apache Arrow binary data</param>
-    /// <returns>Formatted Arrow data information</returns>
-    private ArrowDataInfo ReadArrowStream(byte[] arrowData)
-    {
-        try
+        return Task.Run(() =>
         {
-            _logger.LogDebug("Starting Arrow stream processing for {DataSize} bytes", arrowData.Length);
-            return ProcessArrowStream(arrowData);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Arrow parsing failed, creating minimal fallback info");
-            return CreateFallbackInfo(ex);
-        }
-    }
-
-    private ArrowDataInfo ProcessArrowStream(byte[] arrowData)
-    {
-        using var stream = new MemoryStream(arrowData);
-        using var reader = new ArrowStreamReader(stream);
-
-        var info = new ArrowDataInfo
-        {
-            Schema = reader.Schema != null ? ExtractSchemaInfo(reader.Schema) : null,
-            Success = true
-        };
-
-        var batches = ReadAllBatches(reader, info);
-        _logger.LogDebug("Read {BatchCount} batches with total {TotalRows} rows", batches.Count, info.TotalRows);
-
-        info.AllData = ExtractAllData(batches, info.Schema?.Columns);
-
-        info.BatchCount = batches.Count;
-        return info;
-    }
-
-    private static List<RecordBatch> ReadAllBatches(ArrowStreamReader reader, ArrowDataInfo info)
-    {
-        var batches = new List<RecordBatch>();
-        while (reader.ReadNextRecordBatch() is { } batch)
-        {
-            batches.Add(batch);
-            info.TotalRows += batch.Length;
-        }
-        return batches;
-    }
-
-    private static ArrowSchemaInfo ExtractSchemaInfo(Schema schema) => new()
-    {
-        FieldCount = schema.FieldsList.Count,
-        Columns = schema.FieldsList.Select(field => new ArrowColumnInfo
-        {
-            Name = field.Name,
-            DataType = field.DataType.TypeId.ToString(),
-            IsNullable = field.IsNullable,
-            Metadata = field.Metadata?.Keys.ToDictionary(k => k, k => field.Metadata[k]) ?? []
-        }).ToList()
-    };
-
-    private static Dictionary<string, List<object>> ExtractAllData(List<RecordBatch> batches, List<ArrowColumnInfo>? columns)
-    {
-        if (columns == null || columns.Count == 0)
-            return [];
-
-        var allData = columns.ToDictionary(col => col.Name, _ => new List<object>());
-
-        foreach (var batch in batches)
-        {
-            ExtractBatchData(batch, columns, allData, batch.Length);
-        }
-
-        return allData;
-    }
-
-    private static void ExtractBatchData(RecordBatch batch, List<ArrowColumnInfo> columns, Dictionary<string, List<object>> data, int rowLimit)
-    {
-        for (int colIndex = 0; colIndex < Math.Min(batch.ColumnCount, columns.Count); colIndex++)
-        {
-            var column = batch.Column(colIndex);
-            var columnName = columns[colIndex].Name;
-
-            for (int rowIndex = 0; rowIndex < Math.Min(rowLimit, column.Length); rowIndex++)
+            try
             {
-                try
+                using var stream = new MemoryStream(arrowData);
+                using var reader = new ArrowStreamReader(stream);
+
+                var columns = reader.Schema?.FieldsList.Select(f => f.Name).ToList() ?? new List<string>();
+                var allData = new Dictionary<string, List<object>>();
+                var totalRows = 0;
+                var batchCount = 0;
+
+                // Initialize data structure
+                foreach (var col in columns)
+                    allData[col] = new List<object>();
+
+                // Read all batches
+                while (reader.ReadNextRecordBatch() is { } batch)
                 {
-                    var value = ExtractValueFromArray(column, rowIndex);
-                    data[columnName].Add(value ?? "");
+                    batchCount++;
+                    totalRows += batch.Length;
+
+                    for (int colIndex = 0; colIndex < Math.Min(batch.ColumnCount, columns.Count); colIndex++)
+                    {
+                        var column = batch.Column(colIndex);
+                        var columnName = columns[colIndex];
+
+                        for (int rowIndex = 0; rowIndex < batch.Length; rowIndex++)
+                        {
+                            try
+                            {
+                                var value = ExtractValueFromArray(column, rowIndex);
+                                allData[columnName].Add(value ?? "");
+                            }
+                            catch
+                            {
+                                allData[columnName].Add("");
+                            }
+                        }
+                    }
                 }
-                catch
+
+                return new QueryResultSummary
                 {
-                    data[columnName].Add("");
-                }
+                    ArrowParsingSuccess = true,
+                    Columns = columns,
+                    EstimatedRowCount = totalRows,
+                    BatchCount = batchCount,
+                    StructuredSampleData = allData
+                };
             }
-        }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Arrow parsing failed");
+                return new QueryResultSummary
+                {
+                    ArrowParsingSuccess = false,
+                    ArrowParsingError = ex.Message,
+                    Columns = new List<string>(),
+                    EstimatedRowCount = 0,
+                    BatchCount = 0,
+                    StructuredSampleData = new Dictionary<string, List<object>>()
+                };
+            }
+        });
     }
 
     private static object? ExtractValueFromArray(IArrowArray array, int index) =>
@@ -151,20 +114,5 @@ public class ArrowDataReaderService : IArrowDataReaderService
             _ => $"[{array.GetType().Name}] - Unsupported type"
         };
 
-    private static ArrowDataInfo CreateFallbackInfo(Exception? ex = null)
-    {
-        return new ArrowDataInfo
-        {
-            Success = false,
-            Error = ex?.Message ?? "Unknown error during Arrow parsing",
-            Schema = new ArrowSchemaInfo
-            {
-                FieldCount = 0,
-                Columns = []
-            },
-            AllData = [],
-            TotalRows = 0,
-            BatchCount = 0
-        };
-    }
+
 }

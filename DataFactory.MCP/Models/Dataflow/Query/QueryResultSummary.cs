@@ -14,28 +14,10 @@ public class QueryResultSummary
     public List<string>? Columns { get; set; }
 
     /// <summary>
-    /// Sample values extracted from the data (limited for display)
-    /// </summary>
-    [JsonPropertyName("sampleData")]
-    public Dictionary<string, List<string>>? SampleData { get; set; }
-
-    /// <summary>
     /// Number of rows in the result (if determinable)
     /// </summary>
     [JsonPropertyName("estimatedRowCount")]
     public int? EstimatedRowCount { get; set; }
-
-    /// <summary>
-    /// Format description
-    /// </summary>
-    [JsonPropertyName("format")]
-    public string Format { get; set; } = "Apache Arrow";
-
-    /// <summary>
-    /// Enhanced Arrow schema information
-    /// </summary>
-    [JsonPropertyName("arrowSchema")]
-    public ArrowSchemaDetails? ArrowSchema { get; set; }
 
     /// <summary>
     /// Structured sample data from Arrow format

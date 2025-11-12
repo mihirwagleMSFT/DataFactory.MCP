@@ -1,4 +1,4 @@
-using DataFactory.MCP.Models.Arrow;
+using DataFactory.MCP.Models.Dataflow.Query;
 
 namespace DataFactory.MCP.Abstractions.Interfaces;
 
@@ -8,9 +8,9 @@ namespace DataFactory.MCP.Abstractions.Interfaces;
 public interface IArrowDataReaderService
 {
     /// <summary>
-    /// Reads Apache Arrow stream and extracts metadata and formatted data
+    /// Reads Apache Arrow stream and creates query result summary directly
     /// </summary>
     /// <param name="arrowData">The Apache Arrow binary data</param>
-    /// <returns>Formatted Arrow data information</returns>
-    Task<ArrowDataInfo> ReadArrowStreamAsync(byte[] arrowData);
+    /// <returns>Query result summary for dataflow responses</returns>
+    Task<QueryResultSummary> ReadArrowStreamAsync(byte[] arrowData);
 }
