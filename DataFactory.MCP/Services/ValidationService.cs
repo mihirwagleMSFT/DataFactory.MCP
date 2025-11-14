@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using DataFactory.MCP.Abstractions.Interfaces;
+using DataFactory.MCP.Models;
 
 namespace DataFactory.MCP.Services;
 
@@ -43,7 +44,7 @@ public class ValidationService : IValidationService
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new ArgumentException($"{parameterName} is required and cannot be empty", parameterName);
+            throw new ArgumentException(Messages.InvalidParameterEmpty(parameterName), parameterName);
         }
 
         if (maxLength.HasValue && value.Length > maxLength.Value)

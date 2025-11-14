@@ -1,4 +1,5 @@
 using DataFactory.MCP.Models.Connection;
+using DataFactory.MCP.Models.Connection.Create;
 
 namespace DataFactory.MCP.Abstractions.Interfaces;
 

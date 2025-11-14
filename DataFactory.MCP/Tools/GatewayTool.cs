@@ -4,7 +4,6 @@ using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
 using DataFactory.MCP.Models;
 using DataFactory.MCP.Models.Gateway;
-using System.Text.Json;
 
 namespace DataFactory.MCP.Tools;
 
@@ -12,10 +11,12 @@ namespace DataFactory.MCP.Tools;
 public class GatewayTool
 {
     private readonly IFabricGatewayService _gatewayService;
+    private readonly IValidationService _validationService;
 
-    public GatewayTool(IFabricGatewayService gatewayService)
+    public GatewayTool(IFabricGatewayService gatewayService, IValidationService validationService)
     {
         _gatewayService = gatewayService;
+        _validationService = validationService;
     }
 
     [McpServerTool, Description(@"Lists all gateways the user has permission for, including on-premises, on-premises (personal mode), and virtual network gateways")]
@@ -39,23 +40,19 @@ public class GatewayTool
                 Gateways = response.Value.Select(g => g.ToFormattedInfo())
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
         }
         catch (HttpRequestException ex)
         {
-            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
+            return ex.ToHttpError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return string.Format(Messages.ErrorListingGatewaysTemplate, ex.Message);
+            return ex.ToOperationError("listing gateways").ToMcpJson();
         }
     }
 
@@ -65,32 +62,29 @@ public class GatewayTool
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(gatewayId))
-            {
-                return Messages.GatewayIdRequired;
-            }
+            _validationService.ValidateRequiredString(gatewayId, nameof(gatewayId));
 
             var gateway = await _gatewayService.GetGatewayAsync(gatewayId);
 
             if (gateway == null)
             {
-                return string.Format(Messages.GatewayNotFoundTemplate, gatewayId);
+                return ResponseExtensions.ToNotFoundError("Gateway", gatewayId).ToMcpJson();
             }
 
             var result = gateway.ToFormattedInfo();
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.ToValidationError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return string.Format(Messages.ErrorRetrievingGatewayTemplate, ex.Message);
+            return ex.ToOperationError("retrieving gateway").ToMcpJson();
         }
     }
 
@@ -107,41 +101,18 @@ public class GatewayTool
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(displayName))
-            {
-                return "Error: displayName parameter is required.";
-            }
-
-            if (string.IsNullOrWhiteSpace(capacityId))
-            {
-                return "Error: capacityId parameter is required.";
-            }
-
-            if (string.IsNullOrWhiteSpace(subscriptionId))
-            {
-                return "Error: subscriptionId parameter is required.";
-            }
-
-            if (string.IsNullOrWhiteSpace(resourceGroupName))
-            {
-                return "Error: resourceGroupName parameter is required.";
-            }
-
-            if (string.IsNullOrWhiteSpace(virtualNetworkName))
-            {
-                return "Error: virtualNetworkName parameter is required.";
-            }
-
-            if (string.IsNullOrWhiteSpace(subnetName))
-            {
-                return "Error: subnetName parameter is required.";
-            }
+            _validationService.ValidateRequiredString(displayName, nameof(displayName));
+            _validationService.ValidateRequiredString(capacityId, nameof(capacityId));
+            _validationService.ValidateRequiredString(subscriptionId, nameof(subscriptionId));
+            _validationService.ValidateRequiredString(resourceGroupName, nameof(resourceGroupName));
+            _validationService.ValidateRequiredString(virtualNetworkName, nameof(virtualNetworkName));
+            _validationService.ValidateRequiredString(subnetName, nameof(subnetName));
 
             // Validate inactivityMinutesBeforeSleep
             var validValues = new[] { 30, 60, 90, 120, 150, 240, 360, 480, 720, 1440 };
             if (!validValues.Contains(inactivityMinutesBeforeSleep))
             {
-                return $"Error: inactivityMinutesBeforeSleep must be one of: {string.Join(", ", validValues)}";
+                throw new ArgumentException($"inactivityMinutesBeforeSleep must be one of: {string.Join(", ", validValues)}");
             }
 
             var request = new CreateVNetGatewayRequest
@@ -184,23 +155,19 @@ public class GatewayTool
                 }
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
         }
         catch (HttpRequestException ex)
         {
-            return $"Error creating VNet gateway: {ex.Message}";
+            return ex.ToHttpError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return $"Error creating VNet gateway '{displayName}': {ex.Message}";
+            return ex.ToOperationError($"creating VNet gateway '{displayName}'").ToMcpJson();
         }
     }
 }

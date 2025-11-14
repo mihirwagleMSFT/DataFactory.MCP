@@ -1,4 +1,5 @@
 using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Dataflow.Query;
 
 namespace DataFactory.MCP.Abstractions.Interfaces;
 
@@ -26,4 +27,18 @@ public interface IFabricDataflowService
     Task<CreateDataflowResponse> CreateDataflowAsync(
         string workspaceId,
         CreateDataflowRequest request);
+
+    /// <summary>
+    /// Executes a query against a dataflow and returns the results
+    /// </summary>
+    /// <param name="workspaceId">The workspace ID containing the dataflow</param>
+    /// <param name="dataflowId">The dataflow ID to execute the query against</param>
+    /// <param name="request">The execute query request containing the M query</param>
+    /// <returns>The query execution results in Apache Arrow format</returns>
+    Task<ExecuteDataflowQueryResponse> ExecuteQueryAsync(
+        string workspaceId,
+        string dataflowId,
+        ExecuteDataflowQueryRequest request);
+
+
 }

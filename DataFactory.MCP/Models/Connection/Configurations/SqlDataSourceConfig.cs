@@ -1,4 +1,5 @@
 using DataFactory.MCP.Models.Connection.Interfaces;
+using DataFactory.MCP.Models.Connection.Create.Parameters;
 
 namespace DataFactory.MCP.Models.Connection.Configurations;
 

@@ -1,6 +1,7 @@
 using DataFactory.MCP.Abstractions;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Dataflow.Query;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
@@ -13,14 +14,17 @@ namespace DataFactory.MCP.Services;
 public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 {
     private readonly IValidationService _validationService;
+    private readonly IArrowDataReaderService _arrowDataReaderService;
 
     public FabricDataflowService(
         ILogger<FabricDataflowService> logger,
         IAuthenticationService authService,
-        IValidationService validationService)
+        IValidationService validationService,
+        IArrowDataReaderService arrowDataReaderService)
         : base(logger, authService)
     {
         _validationService = validationService;
+        _arrowDataReaderService = arrowDataReaderService;
     }
 
     public async Task<ListDataflowsResponse> ListDataflowsAsync(
@@ -128,5 +132,84 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         }
 
         return url.ToString();
+    }
+
+    public async Task<ExecuteDataflowQueryResponse> ExecuteQueryAsync(
+        string workspaceId,
+        string dataflowId,
+        ExecuteDataflowQueryRequest request)
+    {
+        try
+        {
+            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
+            _validationService.ValidateGuid(dataflowId, nameof(dataflowId));
+            _validationService.ValidateAndThrow(request, nameof(request));
+
+            await EnsureAuthenticationAsync();
+
+            var url = $"{BaseUrl}/workspaces/{workspaceId}/dataflows/{dataflowId}/executeQuery";
+            var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            Logger.LogInformation("Executing query '{QueryName}' on dataflow {DataflowId} in workspace {WorkspaceId}: {Url}",
+                request.QueryName, dataflowId, workspaceId, url);
+
+            var response = await HttpClient.PostAsync(url, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Read the binary response data
+                var responseData = await response.Content.ReadAsByteArrayAsync();
+                var contentType = response.Content.Headers.ContentType?.MediaType;
+                var contentLength = responseData.Length;
+
+                Logger.LogInformation("Successfully executed query '{QueryName}' on dataflow {DataflowId}. Response: {ContentLength} bytes, Content-Type: {ContentType}",
+                    request.QueryName, dataflowId, contentLength, contentType);
+
+                // Extract data from Arrow stream directly to final format
+                var summary = await _arrowDataReaderService.ReadArrowStreamAsync(responseData);
+
+                return new ExecuteDataflowQueryResponse
+                {
+                    Data = responseData,
+                    ContentType = contentType,
+                    ContentLength = contentLength,
+                    Success = true,
+                    Summary = summary,
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "executedAt", DateTime.UtcNow },
+                        { "workspaceId", workspaceId },
+                        { "dataflowId", dataflowId },
+                        { "queryName", request.QueryName }
+                    }
+                };
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogError("Failed to execute query '{QueryName}' on dataflow {DataflowId}. Status: {StatusCode}, Content: {Content}",
+                    request.QueryName, dataflowId, response.StatusCode, errorContent);
+
+                return new ExecuteDataflowQueryResponse
+                {
+                    Success = false,
+                    Error = $"Query execution failed: {response.StatusCode} - {errorContent}",
+                    ContentLength = 0
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error executing query '{QueryName}' on dataflow {DataflowId} in workspace {WorkspaceId}",
+                request?.QueryName, dataflowId, workspaceId);
+
+            return new ExecuteDataflowQueryResponse
+            {
+                Success = false,
+                Error = $"Query execution error: {ex.Message}",
+                ContentLength = 0
+            };
+        }
     }
 }

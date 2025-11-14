@@ -1,8 +1,8 @@
 using Xunit;
 using DataFactory.MCP.Tools;
 using DataFactory.MCP.Tests.Infrastructure;
-using DataFactory.MCP.Models;
 using System.Text.Json;
+using DataFactory.MCP.Models;
 
 namespace DataFactory.MCP.Tests.Integration;
 
@@ -53,7 +53,7 @@ public class DataflowToolIntegrationTests : FabricToolIntegrationTestBase
         var result = await _dataflowTool.ListDataflowsAsync("");
 
         // Assert
-        Assert.Equal("Error: Workspace ID is required.", result);
+        McpResponseAssertHelper.AssertValidationError(result, Messages.InvalidParameterEmpty("workspaceId"));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class DataflowToolIntegrationTests : FabricToolIntegrationTestBase
         var result = await _dataflowTool.ListDataflowsAsync(null!);
 
         // Assert
-        Assert.Equal("Error: Workspace ID is required.", result);
+        McpResponseAssertHelper.AssertValidationError(result, Messages.InvalidParameterEmpty("workspaceId"));
     }
 
     [Fact]
@@ -147,11 +147,11 @@ public class DataflowToolIntegrationTests : FabricToolIntegrationTestBase
         AssertNoAuthenticationError(result);
 
         // Should either be a valid response, "no dataflows found", or API error
-        Assert.True(
-            result.Contains("No dataflows found") ||
-            IsValidJson(result) ||
-            result.Contains("API request failed"),
-            $"Expected valid response format, got: {result}");
+        if (result.Contains("HttpRequestError"))
+        {
+            McpResponseAssertHelper.AssertHttpError(result);
+            return;
+        }
 
         // If it's JSON, verify basic structure
         if (IsValidJson(result))

@@ -2,8 +2,6 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
-using DataFactory.MCP.Models;
-using System.Text.Json;
 
 namespace DataFactory.MCP.Tools;
 
@@ -38,23 +36,19 @@ public class CapacityTool
                 FormattedResults = response.Value.ToFormattedList()
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
         }
         catch (HttpRequestException ex)
         {
-            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
+            return ex.ToHttpError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return $"Error listing capacities: {ex.Message}";
+            return ex.ToOperationError("listing capacities").ToMcpJson();
         }
     }
 }

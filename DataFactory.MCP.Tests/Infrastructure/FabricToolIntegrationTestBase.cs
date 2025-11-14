@@ -1,6 +1,5 @@
 using Xunit;
 using DataFactory.MCP.Tools;
-using DataFactory.MCP.Tests.Infrastructure;
 using DataFactory.MCP.Models;
 using System.Text.Json;
 
@@ -169,7 +168,7 @@ public abstract class FabricToolIntegrationTestBase : IClassFixture<McpTestFixtu
         SkipIfUpstreamBlocked(result);
 
         // The result should be either a "not found" message or a JSON object
-        Assert.Equal($"{scenarioType} with ID '{testId}' not found or you don't have permission to access it.", result);
+        McpResponseAssertHelper.AssertNotFoundError(result, scenarioType, testId);
     }
 
 }

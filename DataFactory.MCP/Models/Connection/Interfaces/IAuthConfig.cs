@@ -1,3 +1,5 @@
+using DataFactory.MCP.Models.Connection.Create.Credentials;
+
 namespace DataFactory.MCP.Models.Connection.Interfaces;
 
 /// <summary>

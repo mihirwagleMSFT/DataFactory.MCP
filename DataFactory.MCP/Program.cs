@@ -5,23 +5,34 @@ using DataFactory.MCP.Tools;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Services;
 using DataFactory.MCP.Models.Connection.Factories;
+using DataFactory.MCP.Configuration;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 // Configure all logs to go to stderr (stdout is used for the MCP protocol messages).
 builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 
+// Create a logger for startup tracing
+using var loggerFactory = LoggerFactory.Create(builder =>
+    builder.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace));
+var logger = loggerFactory.CreateLogger("DataFactory.MCP.Startup");
+
 // Add the MCP services: the transport to use (stdio) and the tools to register.
 builder.Services
     .AddSingleton<IValidationService, ValidationService>()
     .AddSingleton<IAuthenticationService, AuthenticationService>()
+    .AddSingleton<IArrowDataReaderService, ArrowDataReaderService>()
     .AddSingleton<IFabricGatewayService, FabricGatewayService>()
     .AddSingleton<IFabricConnectionService, FabricConnectionService>()
     .AddSingleton<IFabricWorkspaceService, FabricWorkspaceService>()
     .AddSingleton<IFabricDataflowService, FabricDataflowService>()
     .AddSingleton<IFabricCapacityService, FabricCapacityService>()
     .AddSingleton<IAzureResourceDiscoveryService, AzureResourceDiscoveryService>()
-    .AddSingleton<FabricDataSourceConnectionFactory>()
+    .AddSingleton<FabricDataSourceConnectionFactory>();
+
+// Configure MCP server with conditional tool registration
+logger.LogInformation("Registering core MCP tools...");
+var mcpBuilder = builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
     .WithTools<AuthenticationTool>()
@@ -31,5 +42,13 @@ builder.Services
     .WithTools<DataflowTool>()
     .WithTools<CapacityTool>()
     .WithTools<AzureResourceDiscoveryTool>();
+
+// Conditionally enable DataflowQueryTool based on feature flag
+mcpBuilder.RegisterToolWithFeatureFlag<DataflowQueryTool>(
+    builder.Configuration,
+    args,
+    FeatureFlags.DataflowQuery,
+    nameof(DataflowQueryTool),
+    logger);
 
 await builder.Build().RunAsync();

@@ -1,12 +1,9 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
-using System.Text.Json;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
 using DataFactory.MCP.Models;
-using DataFactory.MCP.Models.Connection;
 using DataFactory.MCP.Models.Connection.Factories;
-using DataFactory.MCP.Models.Connection.Formatters;
 
 namespace DataFactory.MCP.Tools;
 
@@ -15,6 +12,7 @@ public class ConnectionsTool
 {
     private readonly IFabricConnectionService _connectionService;
     private readonly FabricDataSourceConnectionFactory _connectionFactory;
+    private readonly IValidationService _validationService;
 
     public ConnectionsTool(
         IFabricConnectionService connectionService,
@@ -23,6 +21,7 @@ public class ConnectionsTool
     {
         _connectionService = connectionService;
         _connectionFactory = connectionFactory;
+        _validationService = validationService;
     }
 
     [McpServerTool, Description(@"Lists all connections the user has permission for, including on-premises, virtual network and cloud connections")]
@@ -46,23 +45,19 @@ public class ConnectionsTool
                 Connections = response.Value.Select(c => c.ToFormattedInfo())
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
         }
         catch (HttpRequestException ex)
         {
-            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
+            return ex.ToHttpError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return string.Format(Messages.ErrorListingConnectionsTemplate, ex.Message);
+            return ex.ToOperationError("listing connections").ToMcpJson();
         }
     }
 
@@ -72,32 +67,29 @@ public class ConnectionsTool
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(connectionId))
-            {
-                return Messages.ConnectionIdRequired;
-            }
+            _validationService.ValidateRequiredString(connectionId, nameof(connectionId));
 
             var connection = await _connectionService.GetConnectionAsync(connectionId);
 
             if (connection == null)
             {
-                return string.Format(Messages.ConnectionNotFoundTemplate, connectionId);
+                return ResponseExtensions.ToNotFoundError("Connection", connectionId).ToMcpJson();
             }
 
             var result = connection.ToFormattedInfo();
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.ToValidationError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return string.Format(Messages.ErrorRetrievingConnectionTemplate, ex.Message);
+            return ex.ToOperationError("retrieving connection").ToMcpJson();
         }
     }
 
@@ -114,11 +106,11 @@ public class ConnectionsTool
             var connection = await _connectionFactory.CreateCloudSqlBasicAsync(
                 displayName, serverName, databaseName, username, password);
 
-            return FabricConnectionResultFormatter.FormatConnectionResult(connection, "Cloud SQL connection with basic authentication created successfully");
+            return connection.ToCreationSuccessResponse("Cloud SQL connection with basic authentication created successfully").ToMcpJson();
         }
         catch (Exception ex)
         {
-            return FabricConnectionResultFormatter.FormatErrorResult(ex);
+            return ex.ToOperationError("creating cloud SQL connection").ToMcpJson();
         }
     }
 
@@ -133,11 +125,11 @@ public class ConnectionsTool
             var connection = await _connectionFactory.CreateCloudSqlWorkspaceIdentityAsync(
                 displayName, serverName, databaseName);
 
-            return FabricConnectionResultFormatter.FormatConnectionResult(connection, "Cloud SQL connection with workspace identity created successfully");
+            return connection.ToCreationSuccessResponse("Cloud SQL connection with workspace identity created successfully").ToMcpJson();
         }
         catch (Exception ex)
         {
-            return FabricConnectionResultFormatter.FormatErrorResult(ex);
+            return ex.ToOperationError("creating cloud SQL workspace identity connection").ToMcpJson();
         }
     }
 
@@ -150,11 +142,11 @@ public class ConnectionsTool
         {
             var connection = await _connectionFactory.CreateCloudWebAnonymousAsync(displayName, url);
 
-            return FabricConnectionResultFormatter.FormatConnectionResult(connection, "Cloud web connection with anonymous authentication created successfully");
+            return connection.ToCreationSuccessResponse("Cloud web connection with anonymous authentication created successfully").ToMcpJson();
         }
         catch (Exception ex)
         {
-            return FabricConnectionResultFormatter.FormatErrorResult(ex);
+            return ex.ToOperationError("creating cloud web anonymous connection").ToMcpJson();
         }
     }
 
@@ -170,11 +162,11 @@ public class ConnectionsTool
             var connection = await _connectionFactory.CreateCloudWebBasicAsync(
                 displayName, url, username, password);
 
-            return FabricConnectionResultFormatter.FormatConnectionResult(connection, "Cloud web connection with basic authentication created successfully");
+            return connection.ToCreationSuccessResponse("Cloud web connection with basic authentication created successfully").ToMcpJson();
         }
         catch (Exception ex)
         {
-            return FabricConnectionResultFormatter.FormatErrorResult(ex);
+            return ex.ToOperationError("creating cloud web basic connection").ToMcpJson();
         }
     }
 
@@ -192,11 +184,11 @@ public class ConnectionsTool
             var connection = await _connectionFactory.CreateVNetSqlBasicAsync(
                 displayName, gatewayId, serverName, databaseName, username, password);
 
-            return FabricConnectionResultFormatter.FormatConnectionResult(connection, "VNet gateway SQL connection with basic authentication created successfully");
+            return connection.ToCreationSuccessResponse("VNet gateway SQL connection with basic authentication created successfully").ToMcpJson();
         }
         catch (Exception ex)
         {
-            return FabricConnectionResultFormatter.FormatErrorResult(ex);
+            return ex.ToOperationError("creating VNet gateway SQL connection").ToMcpJson();
         }
     }
 
@@ -212,11 +204,11 @@ public class ConnectionsTool
             var connection = await _connectionFactory.CreateVNetSqlWorkspaceIdentityAsync(
                 displayName, gatewayId, serverName, databaseName);
 
-            return FabricConnectionResultFormatter.FormatConnectionResult(connection, "VNet gateway SQL connection with workspace identity created successfully");
+            return connection.ToCreationSuccessResponse("VNet gateway SQL connection with workspace identity created successfully").ToMcpJson();
         }
         catch (Exception ex)
         {
-            return FabricConnectionResultFormatter.FormatErrorResult(ex);
+            return ex.ToOperationError("creating VNet gateway SQL workspace identity connection").ToMcpJson();
         }
     }
 }

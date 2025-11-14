@@ -2,7 +2,6 @@ using Xunit;
 using DataFactory.MCP.Tools;
 using DataFactory.MCP.Tests.Infrastructure;
 using DataFactory.MCP.Models;
-using System.Text.Json;
 
 namespace DataFactory.MCP.Tests.Integration;
 
@@ -62,8 +61,7 @@ public class ConnectionsToolIntegrationTests : FabricToolIntegrationTestBase
         var result = await _connectionsTool.GetConnectionAsync("");
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(Messages.ConnectionIdRequired, result);
+        McpResponseAssertHelper.AssertValidationError(result, Messages.InvalidParameterEmpty("connectionId"));
     }
 
     [Fact]

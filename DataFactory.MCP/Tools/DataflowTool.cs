@@ -2,9 +2,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
-using DataFactory.MCP.Models;
 using DataFactory.MCP.Models.Dataflow;
-using System.Text.Json;
 
 namespace DataFactory.MCP.Tools;
 
@@ -12,10 +10,12 @@ namespace DataFactory.MCP.Tools;
 public class DataflowTool
 {
     private readonly IFabricDataflowService _dataflowService;
+    private readonly IValidationService _validationService;
 
-    public DataflowTool(IFabricDataflowService dataflowService)
+    public DataflowTool(IFabricDataflowService dataflowService, IValidationService validationService)
     {
         _dataflowService = dataflowService;
+        _validationService = validationService;
     }
 
     [McpServerTool, Description(@"Returns a list of Dataflows from the specified workspace. This API supports pagination.")]
@@ -25,10 +25,7 @@ public class DataflowTool
     {
         try
         {
-            if (string.IsNullOrEmpty(workspaceId))
-            {
-                return "Error: Workspace ID is required.";
-            }
+            _validationService.ValidateRequiredString(workspaceId, nameof(workspaceId));
 
             var response = await _dataflowService.ListDataflowsAsync(workspaceId, continuationToken);
 
@@ -47,27 +44,23 @@ public class DataflowTool
                 Dataflows = response.Value.Select(d => d.ToFormattedInfo())
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (ArgumentException ex)
         {
-            return $"Error: {ex.Message}";
+            return ex.ToValidationError().ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
         }
         catch (HttpRequestException ex)
         {
-            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
+            return ex.ToHttpError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return $"Error listing dataflows: {ex.Message}";
+            return ex.ToOperationError("listing dataflows").ToMcpJson();
         }
     }
 
@@ -102,31 +95,30 @@ public class DataflowTool
                 CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            return result.ToMcpJson();
         }
         catch (ArgumentException ex)
         {
-            return $"Error: {ex.Message}";
+            return ex.ToValidationError().ToMcpJson();
         }
         catch (UnauthorizedAccessException ex)
         {
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            return ex.ToAuthenticationError().ToMcpJson();
         }
         catch (HttpRequestException ex) when (ex.Message.Contains("403") || ex.Message.Contains("Forbidden"))
         {
-            return $"Error: Access denied or feature not available. The workspace must be on a supported Fabric capacity to create dataflows. Details: {ex.Message}";
+            return new HttpRequestException("Access denied or feature not available. The workspace must be on a supported Fabric capacity to create dataflows.")
+                .ToHttpError().ToMcpJson();
         }
         catch (HttpRequestException ex)
         {
-            return string.Format(Messages.ApiRequestFailedTemplate, ex.Message);
+            return ex.ToHttpError().ToMcpJson();
         }
         catch (Exception ex)
         {
-            return $"Error creating dataflow: {ex.Message}";
+            return ex.ToOperationError("creating dataflow").ToMcpJson();
         }
     }
+
+
 }

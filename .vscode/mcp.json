@@ -6,7 +6,9 @@
 			"args": [
 				"run",
 				"--project",
-				"./DataFactory.MCP/DataFactory.MCP.csproj"
+				"./DataFactory.MCP/DataFactory.MCP.csproj",
+				"--",
+				"--dataflow-query"
 			]
 		}
 	},
