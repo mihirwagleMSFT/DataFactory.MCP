@@ -49,4 +49,16 @@ public interface IFabricDataflowService
     Task<DecodedDataflowDefinition> GetDecodedDataflowDefinitionAsync(
         string workspaceId,
         string dataflowId);
+
+    /// <summary>
+    /// Adds a connection to an existing dataflow by updating its definition
+    /// </summary>
+    /// <param name="workspaceId">The workspace ID containing the dataflow</param>
+    /// <param name="dataflowId">The dataflow ID to update</param>
+    /// <param name="connectionId">The connection ID to add</param>
+    /// <returns>Update operation result</returns>
+    Task<UpdateDataflowDefinitionResponse> AddConnectionToDataflowAsync(
+        string workspaceId,
+        string dataflowId,
+        string connectionId);
 }

@@ -168,4 +168,49 @@ public class DataflowTool
             return ex.ToOperationError("getting decoded dataflow definition").ToMcpJson();
         }
     }
+
+    [McpServerTool, Description(@"Adds a connection to an existing dataflow by updating its definition. Retrieves the current dataflow definition, gets connection details, and updates the queryMetadata.json to include the new connection.")]
+    public async Task<string> AddConnectionToDataflowAsync(
+        [Description("The workspace ID containing the dataflow (required)")] string workspaceId,
+        [Description("The dataflow ID to update (required)")] string dataflowId,
+        [Description("The connection ID to add to the dataflow (required)")] string connectionId)
+    {
+        try
+        {
+            _validationService.ValidateRequiredString(workspaceId, nameof(workspaceId));
+            _validationService.ValidateRequiredString(dataflowId, nameof(dataflowId));
+            _validationService.ValidateRequiredString(connectionId, nameof(connectionId));
+
+            var result = await _dataflowService.AddConnectionToDataflowAsync(workspaceId, dataflowId, connectionId);
+
+            var response = new
+            {
+                Success = result.Success,
+                DataflowId = result.DataflowId,
+                WorkspaceId = result.WorkspaceId,
+                ConnectionId = connectionId,
+                Message = result.Success
+                    ? $"Successfully added connection {connectionId} to dataflow {dataflowId}"
+                    : result.ErrorMessage
+            };
+
+            return response.ToMcpJson();
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.ToValidationError().ToMcpJson();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return ex.ToAuthenticationError().ToMcpJson();
+        }
+        catch (HttpRequestException ex)
+        {
+            return ex.ToHttpError().ToMcpJson();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToOperationError("adding connection to dataflow").ToMcpJson();
+        }
+    }
 }
