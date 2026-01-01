@@ -23,6 +23,8 @@ builder.Services
     .AddSingleton<IAuthenticationService, AuthenticationService>()
     .AddSingleton<IArrowDataReaderService, ArrowDataReaderService>()
     .AddSingleton<IPowerBICloudDatasourceV2Service, PowerBICloudDatasourceV2Service>()
+    .AddSingleton<IDataTransformationService, DataTransformationService>()
+    .AddSingleton<IDataflowDefinitionProcessor, DataflowDefinitionProcessor>()
     .AddSingleton<IFabricGatewayService, FabricGatewayService>()
     .AddSingleton<IFabricConnectionService, FabricConnectionService>()
     .AddSingleton<IFabricWorkspaceService, FabricWorkspaceService>()

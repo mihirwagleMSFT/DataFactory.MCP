@@ -14,8 +14,9 @@ public class FabricGatewayService : FabricServiceBase, IFabricGatewayService
 {
     public FabricGatewayService(
         ILogger<FabricGatewayService> logger,
-        IAuthenticationService authService)
-        : base(logger, authService)
+        IAuthenticationService authService,
+        IValidationService validationService)
+        : base(logger, authService, validationService)
     {
     }
 
@@ -57,14 +58,7 @@ public class FabricGatewayService : FabricServiceBase, IFabricGatewayService
             Logger.LogInformation("Creating VNet gateway '{DisplayName}' in capacity '{CapacityId}'",
                 request.DisplayName, request.CapacityId);
 
-            var json = JsonSerializer.Serialize(request, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var response = await PostAsync<CreateVNetGatewayResponse>("gateways", content);
+            var response = await PostAsync<CreateVNetGatewayResponse>("gateways", request);
 
             Logger.LogInformation("Successfully created VNet gateway '{DisplayName}' with ID '{Id}'",
                 response?.DisplayName, response?.Id);

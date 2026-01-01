@@ -2,6 +2,7 @@ using DataFactory.MCP.Abstractions;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Models.Dataflow;
 using DataFactory.MCP.Models.Dataflow.Query;
+using DataFactory.MCP.Models.Connection;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
@@ -23,21 +24,22 @@ internal class GetDataflowDefinitionHttpResponse
 /// </summary>
 public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 {
-    private readonly IValidationService _validationService;
     private readonly IArrowDataReaderService _arrowDataReaderService;
     private readonly IPowerBICloudDatasourceV2Service _cloudDatasourceService;
+    private readonly IDataflowDefinitionProcessor _definitionProcessor;
 
     public FabricDataflowService(
         ILogger<FabricDataflowService> logger,
         IAuthenticationService authService,
         IValidationService validationService,
         IArrowDataReaderService arrowDataReaderService,
-        IPowerBICloudDatasourceV2Service cloudDatasourceService)
-        : base(logger, authService)
+        IPowerBICloudDatasourceV2Service cloudDatasourceService,
+        IDataflowDefinitionProcessor definitionProcessor)
+        : base(logger, authService, validationService)
     {
-        _validationService = validationService;
         _arrowDataReaderService = arrowDataReaderService;
         _cloudDatasourceService = cloudDatasourceService;
+        _definitionProcessor = definitionProcessor;
     }
 
     public async Task<ListDataflowsResponse> ListDataflowsAsync(
@@ -46,33 +48,16 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
+            await ValidateAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
 
-            await EnsureAuthenticationAsync();
+            var endpoint = BuildDataflowsEndpoint(workspaceId);
+            Logger.LogInformation("Fetching dataflows from workspace {WorkspaceId}", workspaceId);
 
-            var url = BuildDataflowsUrl(workspaceId, continuationToken);
+            var dataflowsResponse = await GetAsync<ListDataflowsResponse>(endpoint, continuationToken);
 
-            Logger.LogInformation("Fetching dataflows from workspace {WorkspaceId}: {Url}", workspaceId, url);
-
-            var response = await HttpClient.GetAsync(url);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                var dataflowsResponse = System.Text.Json.JsonSerializer.Deserialize<ListDataflowsResponse>(content, JsonOptions);
-
-                Logger.LogInformation("Successfully retrieved {Count} dataflows from workspace {WorkspaceId}",
-                    dataflowsResponse?.Value?.Count ?? 0, workspaceId);
-                return dataflowsResponse ?? new ListDataflowsResponse();
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                Logger.LogError("API request failed. Status: {StatusCode}, Content: {Content}",
-                    response.StatusCode, errorContent);
-
-                throw new HttpRequestException($"API request failed: {response.StatusCode} - {errorContent}");
-            }
+            Logger.LogInformation("Successfully retrieved {Count} dataflows from workspace {WorkspaceId}",
+                dataflowsResponse?.Value?.Count ?? 0, workspaceId);
+            return dataflowsResponse ?? new ListDataflowsResponse();
         }
         catch (Exception ex)
         {
@@ -87,38 +72,19 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
-            _validationService.ValidateAndThrow(request, nameof(request));
+            await ValidateAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
+            ValidationService.ValidateAndThrow(request, nameof(request));
 
-            await EnsureAuthenticationAsync();
+            var endpoint = $"workspaces/{workspaceId}/dataflows";
+            Logger.LogInformation("Creating dataflow '{DisplayName}' in workspace {WorkspaceId}",
+                request.DisplayName, workspaceId);
 
-            var url = $"{BaseUrl}/workspaces/{workspaceId}/dataflows";
-            var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            var createResponse = await PostAsync<CreateDataflowResponse>(endpoint, request);
 
-            Logger.LogInformation("Creating dataflow '{DisplayName}' in workspace {WorkspaceId}: {Url}",
-                request.DisplayName, workspaceId, url);
+            Logger.LogInformation("Successfully created dataflow '{DisplayName}' with ID {DataflowId} in workspace {WorkspaceId}",
+                request.DisplayName, createResponse?.Id, workspaceId);
 
-            var response = await HttpClient.PostAsync(url, content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var createResponse = JsonSerializer.Deserialize<CreateDataflowResponse>(responseContent, JsonOptions);
-
-                Logger.LogInformation("Successfully created dataflow '{DisplayName}' with ID {DataflowId} in workspace {WorkspaceId}",
-                    request.DisplayName, createResponse?.Id, workspaceId);
-
-                return createResponse ?? new CreateDataflowResponse();
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                Logger.LogError("Failed to create dataflow. Status: {StatusCode}, Content: {Content}",
-                    response.StatusCode, errorContent);
-
-                throw new HttpRequestException($"Failed to create dataflow: {response.StatusCode} - {errorContent}");
-            }
+            return createResponse ?? new CreateDataflowResponse();
         }
         catch (Exception ex)
         {
@@ -128,23 +94,9 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         }
     }
 
-    private static string BuildDataflowsUrl(string workspaceId, string? continuationToken)
+    private static string BuildDataflowsEndpoint(string workspaceId)
     {
-        var url = new StringBuilder($"{BaseUrl}/workspaces/{workspaceId}/dataflows");
-        var queryParams = new List<string>();
-
-        if (!string.IsNullOrEmpty(continuationToken))
-        {
-            queryParams.Add($"continuationToken={Uri.EscapeDataString(continuationToken)}");
-        }
-
-        if (queryParams.Any())
-        {
-            url.Append("?");
-            url.Append(string.Join("&", queryParams));
-        }
-
-        return url.ToString();
+        return $"workspaces/{workspaceId}/dataflows";
     }
 
     public async Task<ExecuteDataflowQueryResponse> ExecuteQueryAsync(
@@ -154,63 +106,56 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
-            _validationService.ValidateGuid(dataflowId, nameof(dataflowId));
-            _validationService.ValidateAndThrow(request, nameof(request));
+            await ValidateAndAuthenticateAsync(
+                (workspaceId, nameof(workspaceId)),
+                (dataflowId, nameof(dataflowId)));
+            ValidationService.ValidateAndThrow(request, nameof(request));
 
-            await EnsureAuthenticationAsync();
+            var endpoint = $"workspaces/{workspaceId}/dataflows/{dataflowId}/executeQuery";
 
-            var url = $"{BaseUrl}/workspaces/{workspaceId}/dataflows/{dataflowId}/executeQuery";
+            Logger.LogInformation("Executing query '{QueryName}' on dataflow {DataflowId} in workspace {WorkspaceId}",
+                request.QueryName, dataflowId, workspaceId);
+
+            // Handle binary response directly since base PostAsync doesn't support byte[] return type
             var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            Logger.LogInformation("Executing query '{QueryName}' on dataflow {DataflowId} in workspace {WorkspaceId}: {Url}",
-                request.QueryName, dataflowId, workspaceId, url);
+            var url = $"{BaseUrl}/{endpoint}";
+            Logger.LogInformation("Posting to: {Url}", url);
 
             var response = await HttpClient.PostAsync(url, content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                // Read the binary response data
-                var responseData = await response.Content.ReadAsByteArrayAsync();
-                var contentType = response.Content.Headers.ContentType?.MediaType;
-                var contentLength = responseData.Length;
-
-                Logger.LogInformation("Successfully executed query '{QueryName}' on dataflow {DataflowId}. Response: {ContentLength} bytes, Content-Type: {ContentType}",
-                    request.QueryName, dataflowId, contentLength, contentType);
-
-                // Extract data from Arrow stream directly to final format
-                var summary = await _arrowDataReaderService.ReadArrowStreamAsync(responseData);
-
-                return new ExecuteDataflowQueryResponse
-                {
-                    Data = responseData,
-                    ContentType = contentType,
-                    ContentLength = contentLength,
-                    Success = true,
-                    Summary = summary,
-                    Metadata = new Dictionary<string, object>
-                    {
-                        { "executedAt", DateTime.UtcNow },
-                        { "workspaceId", workspaceId },
-                        { "dataflowId", dataflowId },
-                        { "queryName", request.QueryName }
-                    }
-                };
-            }
-            else
+            if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Logger.LogError("Failed to execute query '{QueryName}' on dataflow {DataflowId}. Status: {StatusCode}, Content: {Content}",
-                    request.QueryName, dataflowId, response.StatusCode, errorContent);
-
-                return new ExecuteDataflowQueryResponse
-                {
-                    Success = false,
-                    Error = $"Query execution failed: {response.StatusCode} - {errorContent}",
-                    ContentLength = 0
-                };
+                Logger.LogError("Failed to execute query. Status: {StatusCode}, Content: {Content}",
+                    response.StatusCode, errorContent);
+                throw new HttpRequestException($"Failed to execute query: {response.StatusCode} - {errorContent}");
             }
+
+            var responseData = await response.Content.ReadAsByteArrayAsync();
+            var contentType = "application/octet-stream"; // Arrow format
+            var contentLength = responseData.Length;
+
+            Logger.LogInformation("Successfully executed query '{QueryName}' on dataflow {DataflowId}. Response: {ContentLength} bytes",
+                request.QueryName, dataflowId, contentLength);
+
+            // Delegate Arrow processing to specialized service
+            var summary = await _arrowDataReaderService.ReadArrowStreamAsync(responseData);
+
+            return new ExecuteDataflowQueryResponse
+            {
+                Data = responseData,
+                ContentType = contentType,
+                ContentLength = contentLength,
+                Success = true,
+                Summary = summary,
+                Metadata = new Dictionary<string, object>
+                {
+                    { "executedAt", DateTime.UtcNow },
+                    { "workspaceId", workspaceId },
+                    { "dataflowId", dataflowId },
+                    { "queryName", request.QueryName }
+                }
+            };
         }
         catch (Exception ex)
         {
@@ -226,48 +171,29 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         }
     }
 
+    public async Task<DataflowDefinition> GetDataflowDefinitionAsync(
+        string workspaceId,
+        string dataflowId)
+    {
+        await ValidateAndAuthenticateAsync(
+            (workspaceId, nameof(workspaceId)),
+            (dataflowId, nameof(dataflowId)));
+
+        var response = await GetDataflowDefinitionResponseAsync(workspaceId, dataflowId);
+        return response.Definition;
+    }
+
     public async Task<DecodedDataflowDefinition> GetDecodedDataflowDefinitionAsync(
         string workspaceId,
         string dataflowId)
     {
         try
         {
-            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
-            _validationService.ValidateGuid(dataflowId, nameof(dataflowId));
+            // Get raw definition via HTTP
+            var rawDefinition = await GetDataflowDefinitionAsync(workspaceId, dataflowId);
 
-            var definitionResponse = await GetDataflowDefinitionResponseAsync(workspaceId, dataflowId);
-
-            var decoded = new DecodedDataflowDefinition
-            {
-                RawParts = definitionResponse?.Definition?.Parts ?? new List<DataflowDefinitionPart>()
-            }; foreach (var part in decoded.RawParts)
-            {
-                if (string.IsNullOrEmpty(part.Payload)) continue;
-
-                try
-                {
-                    var decodedBytes = Convert.FromBase64String(part.Payload);
-                    var decodedText = Encoding.UTF8.GetString(decodedBytes);
-
-                    switch (part.Path.ToLowerInvariant())
-                    {
-                        case "querymetadata.json":
-                            decoded.QueryMetadata = ParseJsonContent(decodedText);
-                            break;
-                        case "mashup.pq":
-                            decoded.MashupQuery = decodedText;
-                            break;
-                        case ".platform":
-                            decoded.PlatformMetadata = ParseJsonContent(decodedText);
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning(ex, "Failed to decode part {PartPath} for dataflow {DataflowId}",
-                        part.Path, dataflowId);
-                }
-            }
+            // Delegate decoding to processor service
+            var decoded = _definitionProcessor.DecodeDefinition(rawDefinition);
 
             Logger.LogInformation("Successfully decoded definition for dataflow {DataflowId}", dataflowId);
             return decoded;
@@ -280,65 +206,38 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         }
     }
 
-    private static JsonElement? ParseJsonContent(string jsonContent)
-    {
-        try
-        {
-            // Parse JSON content into JsonElement for structured access
-            using var document = JsonDocument.Parse(jsonContent);
-            return document.RootElement.Clone();
-        }
-        catch
-        {
-            // If parsing fails, return null
-            return null;
-        }
-    }
-
     private async Task<GetDataflowDefinitionHttpResponse> GetDataflowDefinitionResponseAsync(string workspaceId, string dataflowId)
     {
-        await EnsureAuthenticationAsync();
+        var endpoint = $"workspaces/{workspaceId}/items/{dataflowId}/getDefinition";
 
-        var url = $"{BaseUrl}/workspaces/{workspaceId}/items/{dataflowId}/getDefinition";
-        var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        Logger.LogInformation("Getting definition for dataflow {DataflowId} in workspace {WorkspaceId}",
+            dataflowId, workspaceId);
 
-        Logger.LogInformation("Getting definition for dataflow {DataflowId} in workspace {WorkspaceId}: {Url}",
-            dataflowId, workspaceId, url);
-
-        var response = await HttpClient.PostAsync(url, content);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorContent = await response.Content.ReadAsStringAsync();
-            Logger.LogError("Failed to get dataflow definition. Status: {StatusCode}, Content: {Content}",
-                response.StatusCode, errorContent);
-            throw new HttpRequestException($"Failed to get dataflow definition: {response.StatusCode} - {errorContent}");
-        }
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-        return JsonSerializer.Deserialize<GetDataflowDefinitionHttpResponse>(responseContent, JsonOptions)
-               ?? throw new InvalidOperationException("Failed to deserialize dataflow definition response");
+        // Use empty object as required by API
+        var emptyRequest = new { };
+        return await PostAsync<GetDataflowDefinitionHttpResponse>(endpoint, emptyRequest)
+               ?? throw new InvalidOperationException("Failed to get dataflow definition response");
     }
 
     public async Task<UpdateDataflowDefinitionResponse> AddConnectionToDataflowAsync(
         string workspaceId,
         string dataflowId,
-        string connectionId)
+        string connectionId,
+        Connection connection)
     {
         try
         {
-            _validationService.ValidateGuid(workspaceId, nameof(workspaceId));
-            _validationService.ValidateGuid(dataflowId, nameof(dataflowId));
-            _validationService.ValidateGuid(connectionId, nameof(connectionId));
-
-            await EnsureAuthenticationAsync();
+            await ValidateAndAuthenticateAsync(
+                (workspaceId, nameof(workspaceId)),
+                (dataflowId, nameof(dataflowId)),
+                (connectionId, nameof(connectionId)));
 
             Logger.LogInformation("Adding connection {ConnectionId} to dataflow {DataflowId} in workspace {WorkspaceId}",
                 connectionId, dataflowId, workspaceId);
 
-            // Step 1: Get current dataflow definition
-            var currentDefinition = await GetDataflowDefinitionResponseAsync(workspaceId, dataflowId);
-            if (currentDefinition.Definition?.Parts == null)
+            // Step 1: Get current dataflow definition via HTTP
+            var currentDefinition = await GetDataflowDefinitionAsync(workspaceId, dataflowId);
+            if (currentDefinition?.Parts == null)
             {
                 return new UpdateDataflowDefinitionResponse
                 {
@@ -349,52 +248,18 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
                 };
             }
 
-            // Step 2: Get connection details
-            var connectionDetails = await GetConnectionDetailsAsync(connectionId);
-            if (connectionDetails == null)
-            {
-                return new UpdateDataflowDefinitionResponse
-                {
-                    Success = false,
-                    ErrorMessage = $"Failed to retrieve connection details for connection ID: {connectionId}",
-                    DataflowId = dataflowId,
-                    WorkspaceId = workspaceId
-                };
-            }
-
-            Logger.LogInformation("Retrieved connection details successfully for connection: {ConnectionId}", connectionId);
-
-            // Step 3: Get the ClusterId for this connection from the Power BI v2.0 API
+            // Step 2: Get the ClusterId for this connection from the Power BI v2.0 API
             // This is required for proper credential binding in the dataflow
-            string? clusterId = null;
-            try
-            {
-                clusterId = await _cloudDatasourceService.GetClusterIdForConnectionAsync(connectionId);
-                if (clusterId != null)
-                {
-                    Logger.LogInformation("Successfully retrieved ClusterId {ClusterId} for connection {ConnectionId}", 
-                        clusterId, connectionId);
-                }
-                else
-                {
-                    Logger.LogWarning("Could not find ClusterId for connection {ConnectionId}. " +
-                        "Credential binding may not work correctly.", connectionId);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Failed to get ClusterId for connection {ConnectionId}. " +
-                    "Continuing without ClusterId - credential binding may not work correctly.", connectionId);
-            }
+            string? clusterId = await GetClusterId(connectionId);
 
-            // Step 4: Update queryMetadata.json to include the new connection
-            var updatedDefinition = await AddConnectionToDefinitionAsync(
-                currentDefinition.Definition,
-                connectionDetails.Value,
+            // Step 3: Process connection addition via business logic service
+            var updatedDefinition = _definitionProcessor.AddConnectionToDefinition(
+                currentDefinition,
+                connection,
                 connectionId,
                 clusterId);
 
-            // Step 5: Update the dataflow definition via API
+            // Step 3: Update via HTTP
             var updateResult = await UpdateDataflowDefinitionAsync(workspaceId, dataflowId, updatedDefinition);
 
             Logger.LogInformation("Successfully added connection {ConnectionId} to dataflow {DataflowId}",
@@ -402,9 +267,10 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 
             return new UpdateDataflowDefinitionResponse
             {
-                Success = true,
+                Success = updateResult,
                 DataflowId = dataflowId,
-                WorkspaceId = workspaceId
+                WorkspaceId = workspaceId,
+                ErrorMessage = updateResult ? null : "Failed to update dataflow definition"
             };
         }
         catch (Exception ex)
@@ -422,215 +288,74 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         }
     }
 
-    private async Task<JsonElement?> GetConnectionDetailsAsync(string connectionId)
+    private async Task<string?> GetClusterId(string connectionId)
     {
+        string? clusterId = null;
         try
         {
-            var url = $"{BaseUrl}/connections/{connectionId}";
-            Logger.LogInformation("Getting connection details for {ConnectionId}: {Url}", connectionId, url);
-
-            var response = await HttpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
+            clusterId = await _cloudDatasourceService.GetClusterIdForConnectionAsync(connectionId);
+            if (clusterId != null)
             {
-                Logger.LogWarning("Failed to get connection details. Status: {StatusCode}", response.StatusCode);
-                return null;
+                Logger.LogInformation("Successfully retrieved ClusterId {ClusterId} for connection {ConnectionId}",
+                    clusterId, connectionId);
             }
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(responseContent);
-            return document.RootElement.Clone();
+            else
+            {
+                Logger.LogWarning("Could not find ClusterId for connection {ConnectionId}. " +
+                    "Credential binding may not work correctly.", connectionId);
+            }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error getting connection details for {ConnectionId}", connectionId);
-            return null;
+            Logger.LogWarning(ex, "Failed to get ClusterId for connection {ConnectionId}. " +
+                "Continuing without ClusterId - credential binding may not work correctly.", connectionId);
         }
+
+        return clusterId;
     }
 
-    private async Task<DataflowDefinition> AddConnectionToDefinitionAsync(
-        DataflowDefinition definition,
-        JsonElement connectionDetails,
-        string connectionId,
-        string? clusterId)
-    {
-        // Find and update the queryMetadata.json part
-        var queryMetadataPart = definition.Parts?.FirstOrDefault(p =>
-            p.Path?.Equals("querymetadata.json", StringComparison.OrdinalIgnoreCase) == true);
-
-        if (queryMetadataPart?.Payload != null)
-        {
-            // Decode current queryMetadata
-            var decodedBytes = Convert.FromBase64String(queryMetadataPart.Payload);
-            var currentMetadataJson = Encoding.UTF8.GetString(decodedBytes);
-
-            using var document = JsonDocument.Parse(currentMetadataJson);
-            var metadata = document.RootElement;
-
-            // Create updated metadata with new connection (including ClusterId if available)
-            var updatedMetadata = CreateUpdatedQueryMetadata(metadata, connectionDetails, connectionId, clusterId);
-
-            // Encode updated metadata back to Base64
-            var updatedMetadataJson = JsonSerializer.Serialize(updatedMetadata, new JsonSerializerOptions { WriteIndented = true });
-            var updatedBytes = Encoding.UTF8.GetBytes(updatedMetadataJson);
-            queryMetadataPart.Payload = Convert.ToBase64String(updatedBytes);
-        }
-
-        return definition;
-    }
-
-    private Dictionary<string, object> CreateUpdatedQueryMetadata(
-        JsonElement currentMetadata,
-        JsonElement connectionDetails,
-        string connectionId,
-        string? clusterId)
-    {
-        // Convert the entire JsonElement to a Dictionary for easier manipulation
-        var metadataDict = JsonElementToDictionary(currentMetadata);
-
-        // Handle connections array
-        if (!metadataDict.ContainsKey("connections"))
-        {
-            metadataDict["connections"] = new List<object>();
-        }
-
-        var connectionsList = metadataDict["connections"] as List<object> ?? new List<object>();
-
-        // Build the connectionId value for the metadata
-        // If we have a ClusterId, use the format: {"ClusterId":"...","DatasourceId":"..."}
-        // This format is required for proper credential binding in Fabric dataflows
-        string connectionIdValue;
-        if (!string.IsNullOrEmpty(clusterId))
-        {
-            // Use the ClusterId + DatasourceId format that Fabric UI uses
-            // This enables proper credential binding for query execution
-            var connectionIdObj = new Dictionary<string, string>
-            {
-                ["ClusterId"] = clusterId,
-                ["DatasourceId"] = connectionId
-            };
-            connectionIdValue = JsonSerializer.Serialize(connectionIdObj);
-        }
-        else
-        {
-            // Fall back to plain connectionId if ClusterId is not available
-            connectionIdValue = connectionId;
-        }
-
-        // Add new connection if it doesn't already exist
-        var newConnection = new Dictionary<string, object>
-        {
-            ["connectionId"] = connectionIdValue,
-            ["kind"] = GetConnectionKind(connectionDetails),
-            ["path"] = GetConnectionPath(connectionDetails)
-        };
-
-        // Check if connection already exists
-        bool connectionExists = connectionsList.Any(conn =>
-        {
-            if (conn is Dictionary<string, object> dict && dict.ContainsKey("connectionId"))
-            {
-                var existingConnectionId = dict["connectionId"]?.ToString();
-                // Check if it matches the connectionId or any format containing it
-                return existingConnectionId == connectionId ||
-                       existingConnectionId == connectionIdValue ||
-                       existingConnectionId?.Contains(connectionId) == true;
-            }
-            return false;
-        });
-
-        if (!connectionExists)
-        {
-            connectionsList.Add(newConnection);
-        }
-
-        metadataDict["connections"] = connectionsList;
-        return metadataDict;
-    }
-
-    private Dictionary<string, object> JsonElementToDictionary(JsonElement element)
-    {
-        var dict = new Dictionary<string, object>();
-
-        foreach (var property in element.EnumerateObject())
-        {
-            dict[property.Name] = JsonElementToObject(property.Value);
-        }
-
-        return dict;
-    }
-
-    private object JsonElementToObject(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString() ?? "",
-            JsonValueKind.Number => element.TryGetInt32(out var intValue) ? intValue : element.GetDouble(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null!,
-            JsonValueKind.Array => element.EnumerateArray().Select(JsonElementToObject).ToList(),
-            JsonValueKind.Object => JsonElementToDictionary(element),
-            _ => element.GetRawText()
-        };
-    }
-
-    private string GetConnectionKind(JsonElement connectionDetails)
+    public async Task<bool> UpdateDataflowDefinitionAsync(string workspaceId, string dataflowId, DataflowDefinition definition)
     {
         try
         {
-            if (connectionDetails.TryGetProperty("connectionDetails", out var connDetails) &&
-                connDetails.TryGetProperty("type", out var typeProp))
-            {
-                return typeProp.GetString() ?? "Unknown";
-            }
-            return "Unknown";
-        }
-        catch
-        {
-            return "Unknown";
-        }
-    }
+            await ValidateAndAuthenticateAsync(
+                (workspaceId, nameof(workspaceId)),
+                (dataflowId, nameof(dataflowId)));
 
-    private string GetConnectionPath(JsonElement connectionDetails)
-    {
-        try
-        {
-            if (connectionDetails.TryGetProperty("connectionDetails", out var connDetails) &&
-                connDetails.TryGetProperty("path", out var pathProp))
-            {
-                return pathProp.GetString() ?? "";
-            }
-            return "";
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
-    private async Task<bool> UpdateDataflowDefinitionAsync(string workspaceId, string dataflowId, DataflowDefinition definition)
-    {
-        try
-        {
-            var url = $"{BaseUrl}/workspaces/{workspaceId}/items/{dataflowId}/updateDefinition";
+            var endpoint = $"workspaces/{workspaceId}/items/{dataflowId}/updateDefinition";
             var request = new UpdateDataflowDefinitionRequest { Definition = definition };
-            var requestJson = JsonSerializer.Serialize(request, JsonOptions);
-            var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
-            Logger.LogInformation("Updating dataflow definition for {DataflowId}: {Url}", dataflowId, url);
-            Logger.LogInformation("Request JSON (first 500 chars): {RequestJson}",
-                requestJson.Length > 500 ? requestJson.Substring(0, 500) + "..." : requestJson);
+            Logger.LogInformation("Updating dataflow definition for {DataflowId}", dataflowId);
 
-            var response = await HttpClient.PostAsync(url, content);
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                Logger.LogError("Failed to update dataflow definition. Status: {StatusCode}, Content: {Content}",
-                    response.StatusCode, errorContent);
+
+                var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                var url = $"{BaseUrl}/{endpoint}";
+                Logger.LogInformation("Posting to: {Url}", url);
+
+                var response = await HttpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    // Fabric API returns 204 No Content on successful update - no response body to deserialize
+                    Logger.LogInformation("Successfully updated dataflow definition for {DataflowId}", dataflowId);
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Logger.LogError("Failed to update dataflow definition. Status: {StatusCode}, Content: {Content}",
+                        response.StatusCode, errorContent);
+                    return false;
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Logger.LogError("Failed to update dataflow definition: {Error}", ex.Message);
                 return false;
             }
-
-            return true;
         }
         catch (Exception ex)
         {

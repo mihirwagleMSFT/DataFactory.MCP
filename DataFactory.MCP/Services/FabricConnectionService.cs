@@ -15,8 +15,9 @@ public class FabricConnectionService : FabricServiceBase, IFabricConnectionServi
 {
     public FabricConnectionService(
         ILogger<FabricConnectionService> logger,
-        IAuthenticationService authService)
-        : base(logger, authService)
+        IAuthenticationService authService,
+        IValidationService validationService)
+        : base(logger, authService, validationService)
     {
         // Add the custom connection converter to handle polymorphic deserialization
         JsonOptions.Converters.Add(new ConnectionJsonConverter());
@@ -61,13 +62,9 @@ public class FabricConnectionService : FabricServiceBase, IFabricConnectionServi
     {
         try
         {
-            var json = JsonSerializer.Serialize(request, JsonOptions);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
             Logger.LogInformation("Creating cloud connection: {DisplayName}", request.DisplayName);
-            Logger.LogDebug("Request JSON: {Json}", json);
 
-            var response = await PostAsync<ShareableCloudConnection>("connections", content);
+            var response = await PostAsync<ShareableCloudConnection>("connections", request);
 
             if (response == null)
             {
@@ -88,12 +85,9 @@ public class FabricConnectionService : FabricServiceBase, IFabricConnectionServi
     {
         try
         {
-            var json = JsonSerializer.Serialize(request, JsonOptions);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
             Logger.LogInformation("Creating virtual network gateway connection: {DisplayName}", request.DisplayName);
 
-            var response = await PostAsync<VirtualNetworkGatewayConnection>("connections", content);
+            var response = await PostAsync<VirtualNetworkGatewayConnection>("connections", request);
 
             if (response == null)
             {

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Extensions;
 using DataFactory.MCP.Models.Dataflow;
+using DataFactory.MCP.Models.Connection;
 
 namespace DataFactory.MCP.Tools;
 
@@ -10,11 +11,16 @@ namespace DataFactory.MCP.Tools;
 public class DataflowTool
 {
     private readonly IFabricDataflowService _dataflowService;
+    private readonly IFabricConnectionService _connectionService;
     private readonly IValidationService _validationService;
 
-    public DataflowTool(IFabricDataflowService dataflowService, IValidationService validationService)
+    public DataflowTool(
+        IFabricDataflowService dataflowService,
+        IFabricConnectionService connectionService,
+        IValidationService validationService)
     {
         _dataflowService = dataflowService;
+        _connectionService = connectionService;
         _validationService = validationService;
     }
 
@@ -181,7 +187,22 @@ public class DataflowTool
             _validationService.ValidateRequiredString(dataflowId, nameof(dataflowId));
             _validationService.ValidateRequiredString(connectionId, nameof(connectionId));
 
-            var result = await _dataflowService.AddConnectionToDataflowAsync(workspaceId, dataflowId, connectionId);
+            // Get connection details using the dedicated connection service
+            var connection = await _connectionService.GetConnectionAsync(connectionId);
+            if (connection == null)
+            {
+                var errorResponse = new
+                {
+                    Success = false,
+                    DataflowId = dataflowId,
+                    WorkspaceId = workspaceId,
+                    ConnectionId = connectionId,
+                    Message = $"Connection with ID '{connectionId}' not found"
+                };
+                return errorResponse.ToMcpJson();
+            }
+
+            var result = await _dataflowService.AddConnectionToDataflowAsync(workspaceId, dataflowId, connectionId, connection);
 
             var response = new
             {

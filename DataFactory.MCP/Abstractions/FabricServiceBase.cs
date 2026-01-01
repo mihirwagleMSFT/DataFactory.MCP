@@ -2,6 +2,7 @@ using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Models;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -16,15 +17,18 @@ public abstract class FabricServiceBase : IDisposable
     protected readonly HttpClient HttpClient;
     protected readonly ILogger Logger;
     protected readonly IAuthenticationService AuthService;
+    protected readonly IValidationService ValidationService;
     protected readonly JsonSerializerOptions JsonOptions;
 
     protected FabricServiceBase(
         ILogger logger,
-        IAuthenticationService authService)
+        IAuthenticationService authService,
+        IValidationService validationService)
     {
         HttpClient = new HttpClient();
         Logger = logger;
         AuthService = authService;
+        ValidationService = validationService;
 
         JsonOptions = new JsonSerializerOptions
         {
@@ -59,6 +63,18 @@ public abstract class FabricServiceBase : IDisposable
         }
     }
 
+    /// <summary>
+    /// Validates GUIDs and ensures authentication - common pattern across all Fabric services
+    /// </summary>
+    protected async Task ValidateAndAuthenticateAsync(params (string value, string name)[] guids)
+    {
+        foreach (var (value, name) in guids)
+        {
+            ValidationService.ValidateGuid(value, name);
+        }
+        await EnsureAuthenticationAsync();
+    }
+
     protected async Task<T?> GetAsync<T>(string endpoint, string? continuationToken = null) where T : class
     {
         await EnsureAuthenticationAsync();
@@ -88,12 +104,16 @@ public abstract class FabricServiceBase : IDisposable
         }
     }
 
-    protected async Task<T?> PostAsync<T>(string endpoint, HttpContent content) where T : class
+    protected async Task<T?> PostAsync<T>(string endpoint, object request) where T : class
     {
         await EnsureAuthenticationAsync();
 
         var url = $"{BaseUrl}/{endpoint}";
         Logger.LogInformation("Posting to: {Url}", url);
+
+        // Serialize object to JSON content
+        var jsonContent = JsonSerializer.Serialize(request, JsonOptions);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
         var response = await HttpClient.PostAsync(url, content);
 
