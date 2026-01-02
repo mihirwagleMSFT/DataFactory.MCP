@@ -16,9 +16,8 @@ public class FabricGatewayService : FabricServiceBase, IFabricGatewayService
     public FabricGatewayService(
         IHttpClientFactory httpClientFactory,
         ILogger<FabricGatewayService> logger,
-        IAuthenticationService authService,
         IValidationService validationService)
-        : base(httpClientFactory, logger, authService, validationService)
+        : base(httpClientFactory, logger, validationService)
     {
     }
 

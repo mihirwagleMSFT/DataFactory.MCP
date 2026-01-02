@@ -6,10 +6,6 @@ using DataFactory.MCP.Models.Dataflow.Definition;
 using DataFactory.MCP.Models.Dataflow.Query;
 using DataFactory.MCP.Models.Connection;
 using Microsoft.Extensions.Logging;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace DataFactory.MCP.Services;
 
@@ -27,12 +23,11 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     public FabricDataflowService(
         IHttpClientFactory httpClientFactory,
         ILogger<FabricDataflowService> logger,
-        IAuthenticationService authService,
         IValidationService validationService,
         IArrowDataReaderService arrowDataReaderService,
         IGatewayClusterDatasourceService cloudDatasourceService,
         IDataflowDefinitionProcessor definitionProcessor)
-        : base(httpClientFactory, logger, authService, validationService)
+        : base(httpClientFactory, logger, validationService)
     {
         _arrowDataReaderService = arrowDataReaderService;
         _cloudDatasourceService = cloudDatasourceService;
@@ -45,7 +40,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateGuidsAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
+            ValidateGuids((workspaceId, nameof(workspaceId)));
 
             var endpoint = FabricUrlBuilder.ForFabricApi()
                 .WithLiteralPath($"workspaces/{workspaceId}/dataflows")
@@ -71,7 +66,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateGuidsAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
+            ValidateGuids((workspaceId, nameof(workspaceId)));
             ValidationService.ValidateAndThrow(request, nameof(request));
 
             var endpoint = FabricUrlBuilder.ForFabricApi()
@@ -102,7 +97,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateGuidsAndAuthenticateAsync(
+            ValidateGuids(
                 (workspaceId, nameof(workspaceId)),
                 (dataflowId, nameof(dataflowId)));
             ValidationService.ValidateAndThrow(request, nameof(request));
@@ -157,7 +152,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         string workspaceId,
         string dataflowId)
     {
-        await ValidateGuidsAndAuthenticateAsync(
+        ValidateGuids(
             (workspaceId, nameof(workspaceId)),
             (dataflowId, nameof(dataflowId)));
 
@@ -211,7 +206,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateGuidsAndAuthenticateAsync(
+            ValidateGuids(
                 (workspaceId, nameof(workspaceId)),
                 (dataflowId, nameof(dataflowId)),
                 (connectionId, nameof(connectionId)));
@@ -298,7 +293,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 
     public async Task UpdateDataflowDefinitionAsync(string workspaceId, string dataflowId, DataflowDefinition definition)
     {
-        await ValidateGuidsAndAuthenticateAsync(
+        ValidateGuids(
             (workspaceId, nameof(workspaceId)),
             (dataflowId, nameof(dataflowId)));
 

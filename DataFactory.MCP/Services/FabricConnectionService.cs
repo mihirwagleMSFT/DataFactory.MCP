@@ -17,9 +17,8 @@ public class FabricConnectionService : FabricServiceBase, IFabricConnectionServi
     public FabricConnectionService(
         IHttpClientFactory httpClientFactory,
         ILogger<FabricConnectionService> logger,
-        IAuthenticationService authService,
         IValidationService validationService)
-        : base(httpClientFactory, logger, authService, validationService)
+        : base(httpClientFactory, logger, validationService)
     {
         // Add the custom connection converter to handle polymorphic deserialization
         JsonOptions.Converters.Add(new ConnectionJsonConverter());

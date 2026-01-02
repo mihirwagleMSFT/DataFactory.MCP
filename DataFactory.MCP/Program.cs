@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using DataFactory.MCP.Tools;
+using DataFactory.MCP.Abstractions;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Abstractions.Interfaces.DMTSv2;
 using DataFactory.MCP.Services;
@@ -19,24 +20,29 @@ using var loggerFactory = LoggerFactory.Create(builder =>
     builder.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace));
 var logger = loggerFactory.CreateLogger("DataFactory.MCP.Startup");
 
-// Register named HttpClients to avoid socket exhaustion
-builder.Services.AddHttpClient("FabricApi", client =>
+// Register authentication handlers as transient (DelegatingHandlers must be transient)
+builder.Services.AddTransient<FabricAuthenticationHandler>();
+builder.Services.AddTransient<AzureResourceManagerAuthenticationHandler>();
+
+// Register named HttpClients with authentication handlers to avoid socket exhaustion
+// and centralize authentication logic
+builder.Services.AddHttpClient(HttpClientNames.FabricApi, client =>
 {
     client.BaseAddress = new Uri("https://api.fabric.microsoft.com/v1/");
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+}).AddHttpMessageHandler<FabricAuthenticationHandler>();
 
-builder.Services.AddHttpClient("AzureResourceManager", client =>
+builder.Services.AddHttpClient(HttpClientNames.AzureResourceManager, client =>
 {
     client.BaseAddress = new Uri("https://management.azure.com/");
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+}).AddHttpMessageHandler<AzureResourceManagerAuthenticationHandler>();
 
-builder.Services.AddHttpClient("PowerBiApi", client =>
+builder.Services.AddHttpClient(HttpClientNames.PowerBiV2Api, client =>
 {
     client.BaseAddress = new Uri("https://api.powerbi.com/v2.0/");
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+}).AddHttpMessageHandler<FabricAuthenticationHandler>();
 
 // Add the MCP services: the transport to use (stdio) and the tools to register.
 builder.Services

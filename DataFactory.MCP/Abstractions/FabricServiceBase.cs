@@ -1,8 +1,5 @@
 using DataFactory.MCP.Abstractions.Interfaces;
-using DataFactory.MCP.Models;
 using Microsoft.Extensions.Logging;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -12,24 +9,22 @@ namespace DataFactory.MCP.Abstractions;
 /// <summary>
 /// Abstract base class for Microsoft Fabric API services providing common functionality.
 /// Uses IHttpClientFactory for proper HttpClient lifecycle management.
+/// Authentication is handled automatically by FabricAuthenticationHandler in the HTTP pipeline.
 /// </summary>
 public abstract class FabricServiceBase
 {
     protected readonly HttpClient HttpClient;
     protected readonly ILogger Logger;
-    protected readonly IAuthenticationService AuthService;
     protected readonly IValidationService ValidationService;
     protected readonly JsonSerializerOptions JsonOptions;
 
     protected FabricServiceBase(
         IHttpClientFactory httpClientFactory,
         ILogger logger,
-        IAuthenticationService authService,
         IValidationService validationService)
     {
         HttpClient = httpClientFactory.CreateClient(HttpClientNames.FabricApi);
         Logger = logger;
-        AuthService = authService;
         ValidationService = validationService;
 
         JsonOptions = new JsonSerializerOptions
@@ -40,47 +35,19 @@ public abstract class FabricServiceBase
         };
     }
 
-    protected async Task EnsureAuthenticationAsync()
-    {
-        try
-        {
-            var tokenResult = await AuthService.GetAccessTokenAsync();
-
-            if (tokenResult.Contains("No valid authentication") || tokenResult.Contains("expired"))
-            {
-                throw new UnauthorizedAccessException(Messages.AuthenticationRequired);
-            }
-
-            if (!tokenResult.StartsWith("eyJ")) // Basic JWT token validation
-            {
-                throw new UnauthorizedAccessException(Messages.InvalidTokenFormat);
-            }
-
-            HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResult);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to set authentication for Fabric API");
-            throw;
-        }
-    }
-
     /// <summary>
-    /// Validates GUIDs and ensures authentication - common pattern across all Fabric services
+    /// Validates GUIDs before making API calls
     /// </summary>
-    protected async Task ValidateGuidsAndAuthenticateAsync(params (string value, string name)[] guids)
+    protected void ValidateGuids(params (string value, string name)[] guids)
     {
         foreach (var (value, name) in guids)
         {
             ValidationService.ValidateGuid(value, name);
         }
-        await EnsureAuthenticationAsync();
     }
 
     protected async Task<T?> GetAsync<T>(string endpoint, string? continuationToken = null) where T : class
     {
-        await EnsureAuthenticationAsync();
-
         var url = FabricUrlBuilder.ForFabricApi()
             .WithLiteralPath(endpoint)
             .WithContinuationToken(continuationToken)
@@ -107,8 +74,6 @@ public abstract class FabricServiceBase
 
     protected async Task<T?> PostAsync<T>(string endpoint, object request) where T : class
     {
-        await EnsureAuthenticationAsync();
-
         var url = FabricUrlBuilder.ForFabricApi()
             .WithLiteralPath(endpoint)
             .Build();
@@ -140,8 +105,6 @@ public abstract class FabricServiceBase
     /// </summary>
     protected async Task<byte[]> PostAsBytesAsync(string endpoint, object request)
     {
-        await EnsureAuthenticationAsync();
-
         var url = FabricUrlBuilder.ForFabricApi()
             .WithLiteralPath(endpoint)
             .Build();
@@ -171,8 +134,6 @@ public abstract class FabricServiceBase
     /// </summary>
     protected async Task<bool> PostNoContentAsync(string endpoint, object request)
     {
-        await EnsureAuthenticationAsync();
-
         var url = FabricUrlBuilder.ForFabricApi()
             .WithLiteralPath(endpoint)
             .Build();

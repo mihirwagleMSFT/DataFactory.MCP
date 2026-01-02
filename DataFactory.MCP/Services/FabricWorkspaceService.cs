@@ -2,21 +2,20 @@ using DataFactory.MCP.Abstractions;
 using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Models.Workspace;
 using Microsoft.Extensions.Logging;
-using System.Net.Http;
 
 namespace DataFactory.MCP.Services;
 
 /// <summary>
-/// Service for interacting with Microsoft Fabric Workspaces API
+/// Service for interacting with Microsoft Fabric Workspaces API.
+/// Authentication is handled automatically by FabricAuthenticationHandler.
 /// </summary>
 public class FabricWorkspaceService : FabricServiceBase, IFabricWorkspaceService
 {
     public FabricWorkspaceService(
         IHttpClientFactory httpClientFactory,
         ILogger<FabricWorkspaceService> logger,
-        IAuthenticationService authService,
         IValidationService validationService)
-        : base(httpClientFactory, logger, authService, validationService)
+        : base(httpClientFactory, logger, validationService)
     {
     }
 
@@ -27,8 +26,6 @@ public class FabricWorkspaceService : FabricServiceBase, IFabricWorkspaceService
     {
         try
         {
-            await EnsureAuthenticationAsync();
-
             var url = FabricUrlBuilder.ForFabricApi()
                 .WithLiteralPath("workspaces")
                 .WithQueryParam("roles", roles)

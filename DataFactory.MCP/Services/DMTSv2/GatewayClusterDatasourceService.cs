@@ -1,10 +1,7 @@
 using DataFactory.MCP.Abstractions;
-using DataFactory.MCP.Abstractions.Interfaces;
 using DataFactory.MCP.Abstractions.Interfaces.DMTSv2;
-using DataFactory.MCP.Models;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,6 +10,7 @@ namespace DataFactory.MCP.Services.DMTSv2;
 /// <summary>
 /// Service for retrieving ClusterId from the Power BI v2.0 API for cloud datasources.
 /// The ClusterId is required for proper credential binding when adding connections to dataflows.
+/// Authentication is handled automatically by the FabricAuthenticationHandler in the HTTP pipeline.
 /// 
 /// API Endpoint: GET https://api.powerbi.com/v2.0/myorg/me/gatewayClusterDatasources
 /// </summary>
@@ -23,7 +21,6 @@ public class GatewayClusterDatasourceService : IGatewayClusterDatasourceService
         .Build();
 
     private readonly ILogger<GatewayClusterDatasourceService> _logger;
-    private readonly IAuthenticationService _authService;
     private readonly HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonOptions;
 
@@ -34,12 +31,10 @@ public class GatewayClusterDatasourceService : IGatewayClusterDatasourceService
 
     public GatewayClusterDatasourceService(
         IHttpClientFactory httpClientFactory,
-        ILogger<GatewayClusterDatasourceService> logger,
-        IAuthenticationService authService)
+        ILogger<GatewayClusterDatasourceService> logger)
     {
         _httpClient = httpClientFactory.CreateClient(HttpClientNames.PowerBiV2Api);
         _logger = logger;
-        _authService = authService;
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -87,8 +82,6 @@ public class GatewayClusterDatasourceService : IGatewayClusterDatasourceService
             return _cachedDatasources;
         }
 
-        await EnsureAuthenticationAsync();
-
         _logger.LogDebug("Fetching cloud datasources from Power BI v2.0 API");
 
         var response = await _httpClient.GetAsync(GatewayClusterDatasourcesUrl);
@@ -113,23 +106,6 @@ public class GatewayClusterDatasourceService : IGatewayClusterDatasourceService
         _cacheExpiration = DateTime.UtcNow.Add(CacheDuration);
 
         return datasources;
-    }
-
-    private async Task EnsureAuthenticationAsync()
-    {
-        var tokenResult = await _authService.GetAccessTokenAsync();
-
-        if (tokenResult.Contains("No valid authentication") || tokenResult.Contains("expired"))
-        {
-            throw new UnauthorizedAccessException(Messages.AuthenticationRequired);
-        }
-
-        if (!tokenResult.StartsWith("eyJ")) // Basic JWT token validation
-        {
-            throw new UnauthorizedAccessException(Messages.InvalidTokenFormat);
-        }
-
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResult);
     }
 
     #region Internal Models
