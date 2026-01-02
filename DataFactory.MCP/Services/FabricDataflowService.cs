@@ -275,28 +275,27 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
 
     private async Task<string?> GetClusterId(string connectionId)
     {
-        string? clusterId = null;
         try
         {
-            clusterId = await _cloudDatasourceService.GetClusterIdForConnectionAsync(connectionId);
-            if (clusterId != null)
-            {
-                Logger.LogInformation("Successfully retrieved ClusterId {ClusterId} for connection {ConnectionId}",
-                    clusterId, connectionId);
-            }
-            else
+            var clusterId = await _cloudDatasourceService.GetClusterIdForConnectionAsync(connectionId);
+
+            if (clusterId == null)
             {
                 Logger.LogWarning("Could not find ClusterId for connection {ConnectionId}. " +
                     "Credential binding may not work correctly.", connectionId);
+                return null;
             }
+
+            Logger.LogInformation("Successfully retrieved ClusterId {ClusterId} for connection {ConnectionId}",
+                clusterId, connectionId);
+            return clusterId;
         }
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Failed to get ClusterId for connection {ConnectionId}. " +
                 "Continuing without ClusterId - credential binding may not work correctly.", connectionId);
+            return null;
         }
-
-        return clusterId;
     }
 
     public async Task UpdateDataflowDefinitionAsync(string workspaceId, string dataflowId, DataflowDefinition definition)
