@@ -25,10 +25,10 @@ builder.Services.AddTransient<FabricAuthenticationHandler>();
 builder.Services.AddTransient<AzureResourceManagerAuthenticationHandler>();
 
 // Register named HttpClients with authentication handlers to avoid socket exhaustion
-// and centralize authentication logic
+// and centralize authentication logic. Base URLs use centralized ApiVersions constants.
 builder.Services.AddHttpClient(HttpClientNames.FabricApi, client =>
 {
-    client.BaseAddress = new Uri("https://api.fabric.microsoft.com/v1/");
+    client.BaseAddress = new Uri(ApiVersions.Fabric.V1BaseUrl + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<FabricAuthenticationHandler>();
 
@@ -40,7 +40,7 @@ builder.Services.AddHttpClient(HttpClientNames.AzureResourceManager, client =>
 
 builder.Services.AddHttpClient(HttpClientNames.PowerBiV2Api, client =>
 {
-    client.BaseAddress = new Uri("https://api.powerbi.com/v2.0/");
+    client.BaseAddress = new Uri(ApiVersions.PowerBi.V2BaseUrl + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<FabricAuthenticationHandler>();
 

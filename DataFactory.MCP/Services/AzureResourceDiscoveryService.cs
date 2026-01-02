@@ -35,7 +35,7 @@ public class AzureResourceDiscoveryService : IAzureResourceDiscoveryService
 
             var url = FabricUrlBuilder.ForAzureResourceManager()
                 .WithLiteralPath("subscriptions")
-                .WithApiVersion("2020-01-01")
+                .WithApiVersion(ApiVersions.AzureResourceManager.Subscriptions)
                 .Build();
 
             var response = await _httpClient.GetAsync(url);
@@ -60,7 +60,7 @@ public class AzureResourceDiscoveryService : IAzureResourceDiscoveryService
 
             var url = FabricUrlBuilder.ForAzureResourceManager()
                 .WithLiteralPath($"subscriptions/{subscriptionId}/resourcegroups")
-                .WithApiVersion("2021-04-01")
+                .WithApiVersion(ApiVersions.AzureResourceManager.ResourceGroups)
                 .Build();
 
             var response = await _httpClient.GetAsync(url);
@@ -93,7 +93,7 @@ public class AzureResourceDiscoveryService : IAzureResourceDiscoveryService
             {
                 urlBuilder.WithLiteralPath($"subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualNetworks");
             }
-            var url = urlBuilder.WithApiVersion("2023-04-01").Build();
+            var url = urlBuilder.WithApiVersion(ApiVersions.AzureResourceManager.Network).Build();
 
             var response = await _httpClient.GetAsync(url);
             var virtualNetworksResponse = await response.ReadAsJsonOrDefaultAsync(
@@ -118,7 +118,7 @@ public class AzureResourceDiscoveryService : IAzureResourceDiscoveryService
 
             var url = FabricUrlBuilder.ForAzureResourceManager()
                 .WithLiteralPath($"subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/virtualNetworks/{virtualNetworkName}/subnets")
-                .WithApiVersion("2023-04-01")
+                .WithApiVersion(ApiVersions.AzureResourceManager.Network)
                 .Build();
 
             var response = await _httpClient.GetAsync(url);

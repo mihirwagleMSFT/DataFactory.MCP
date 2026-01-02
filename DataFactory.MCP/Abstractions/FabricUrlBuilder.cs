@@ -22,7 +22,7 @@ public class FabricUrlBuilder
     /// <summary>
     /// Creates a URL builder using the default Fabric API base URL
     /// </summary>
-    public static FabricUrlBuilder ForFabricApi() => new("https://api.fabric.microsoft.com/v1");
+    public static FabricUrlBuilder ForFabricApi() => new(ApiVersions.Fabric.V1BaseUrl);
 
     /// <summary>
     /// Creates a URL builder using the Azure Resource Manager base URL
@@ -30,9 +30,9 @@ public class FabricUrlBuilder
     public static FabricUrlBuilder ForAzureResourceManager() => new("https://management.azure.com");
 
     /// <summary>
-    /// Creates a URL builder using the Power BI API base URL
+    /// Creates a URL builder using the Power BI API v2 base URL
     /// </summary>
-    public static FabricUrlBuilder ForPowerBiV2Api() => new("https://api.powerbi.com/v2.0");
+    public static FabricUrlBuilder ForPowerBiV2Api() => new(ApiVersions.PowerBi.V2BaseUrl);
 
     /// <summary>
     /// Appends path segments to the URL. Segments are automatically URL-encoded.
