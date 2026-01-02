@@ -66,7 +66,7 @@ public abstract class FabricServiceBase : IDisposable
     /// <summary>
     /// Validates GUIDs and ensures authentication - common pattern across all Fabric services
     /// </summary>
-    protected async Task ValidateAndAuthenticateAsync(params (string value, string name)[] guids)
+    protected async Task ValidateGuidsAndAuthenticateAsync(params (string value, string name)[] guids)
     {
         foreach (var (value, name) in guids)
         {

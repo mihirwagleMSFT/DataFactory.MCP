@@ -49,7 +49,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
+            await ValidateGuidsAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
 
             var endpoint = BuildDataflowsEndpoint(workspaceId);
             Logger.LogInformation("Fetching dataflows from workspace {WorkspaceId}", workspaceId);
@@ -73,7 +73,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
+            await ValidateGuidsAndAuthenticateAsync((workspaceId, nameof(workspaceId)));
             ValidationService.ValidateAndThrow(request, nameof(request));
 
             var endpoint = $"workspaces/{workspaceId}/dataflows";
@@ -107,7 +107,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateAndAuthenticateAsync(
+            await ValidateGuidsAndAuthenticateAsync(
                 (workspaceId, nameof(workspaceId)),
                 (dataflowId, nameof(dataflowId)));
             ValidationService.ValidateAndThrow(request, nameof(request));
@@ -176,7 +176,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
         string workspaceId,
         string dataflowId)
     {
-        await ValidateAndAuthenticateAsync(
+        await ValidateGuidsAndAuthenticateAsync(
             (workspaceId, nameof(workspaceId)),
             (dataflowId, nameof(dataflowId)));
 
@@ -228,7 +228,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateAndAuthenticateAsync(
+            await ValidateGuidsAndAuthenticateAsync(
                 (workspaceId, nameof(workspaceId)),
                 (dataflowId, nameof(dataflowId)),
                 (connectionId, nameof(connectionId)));
@@ -319,7 +319,7 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
     {
         try
         {
-            await ValidateAndAuthenticateAsync(
+            await ValidateGuidsAndAuthenticateAsync(
                 (workspaceId, nameof(workspaceId)),
                 (dataflowId, nameof(dataflowId)));
 
