@@ -122,16 +122,6 @@ public static class Messages
     public const string NoGatewaysFound = "No gateways found. Make sure you have the required permissions (Gateway.Read.All or Gateway.ReadWrite.All).";
 
     /// <summary>
-    /// Template for connection not found message
-    /// </summary>
-    public const string ConnectionNotFoundTemplate = "Connection with ID '{0}' not found or you don't have permission to access it.";
-
-    /// <summary>
-    /// Template for gateway not found message
-    /// </summary>
-    public const string GatewayNotFoundTemplate = "Gateway with ID '{0}' not found or you don't have permission to access it.";
-
-    /// <summary>
     /// Message when no workspaces are found
     /// </summary>
     public const string NoWorkspacesFound = "No workspaces found. Make sure you have the required permissions (Workspace.Read.All or Workspace.ReadWrite.All).";
