@@ -24,12 +24,12 @@ public class AuthenticationService : IAuthenticationService
     {
         try
         {
-            // Initialize public client for interactive authentication
+            // Initialize public client for both interactive and device code authentication
             _publicClientApp = PublicClientApplicationBuilder
-            .Create(AzureAdConfiguration.ClientId)
-            .WithAuthority(new Uri(AzureAdConfiguration.Authority))
-            .WithRedirectUri(AzureAdConfiguration.RedirectUri)
-            .Build();
+                .Create(AzureAdConfiguration.ClientId)
+                .WithAuthority(new Uri(AzureAdConfiguration.Authority))
+                .WithRedirectUri(AzureAdConfiguration.RedirectUri)
+                .Build();
 
             _logger.LogInformation(Messages.AzureAdClientInitializedSuccessfully);
         }
@@ -40,6 +40,9 @@ public class AuthenticationService : IAuthenticationService
         }
     }
 
+    /// <summary>
+    /// Authenticate using interactive browser flow
+    /// </summary>
     public async Task<string> AuthenticateInteractiveAsync()
     {
         try
@@ -75,6 +78,54 @@ public class AuthenticationService : IAuthenticationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Interactive authentication failed");
+            _currentAuth = null;
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Authenticate using device code flow - ideal for server scenarios
+    /// </summary>
+    public async Task<string> AuthenticateDeviceCodeAsync()
+    {
+        try
+        {
+            if (_publicClientApp == null)
+            {
+                return Messages.PublicClientNotInitialized;
+            }
+
+            _logger.LogInformation("Starting device code authentication");
+
+            var result = await _publicClientApp
+                .AcquireTokenWithDeviceCode(AzureAdConfiguration.PowerBIScopes, callback =>
+                {
+                    _logger.LogInformation("Device code authentication: {UserCode} | {VerificationUrl}",
+                        callback.UserCode, callback.VerificationUrl);
+                    return Task.FromResult(0);
+                })
+                .ExecuteAsync();
+
+            _currentAuth = McpAuthenticationResult.Success(
+                result.AccessToken,
+                result.Account.Username,
+                result.TenantId,
+                result.ExpiresOn.DateTime,
+                string.Join(", ", result.Scopes)
+            );
+
+            _logger.LogInformation("Device code authentication completed successfully for user: {Username}", result.Account.Username);
+            return string.Format(Messages.InteractiveAuthenticationSuccessTemplate, result.Account.Username);
+        }
+        catch (MsalException msalEx)
+        {
+            _logger.LogError(msalEx, "MSAL device code authentication failed");
+            _currentAuth = null;
+            return string.Format(Messages.AuthenticationFailedTemplate, msalEx.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Device code authentication failed");
             _currentAuth = null;
             return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
         }

@@ -34,6 +34,23 @@ public class AuthenticationTool
         }
     }
 
+    [McpServerTool, Description(@"Authenticate with Azure AD using device code flow - ideal for server scenarios without browser access")]
+    public async Task<string> AuthenticateDeviceCodeAsync()
+    {
+        try
+        {
+            return await _authService.AuthenticateDeviceCodeAsync();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains(Messages.ServiceProviderNotInitialized))
+        {
+            return Messages.AuthServiceNotAvailable;
+        }
+        catch (Exception ex)
+        {
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+        }
+    }
+
     [McpServerTool, Description(@"Authenticate with Azure AD using service principal and client secret")]
     public async Task<string> AuthenticateServicePrincipalAsync(
         string applicationId,
