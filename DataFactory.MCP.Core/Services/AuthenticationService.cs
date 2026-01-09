@@ -13,6 +13,8 @@ public class AuthenticationService : IAuthenticationService
     private readonly ILogger<AuthenticationService> _logger;
     private McpAuthenticationResult? _currentAuth;
     private IPublicClientApplication? _publicClientApp;
+    private Task<AuthenticationResult>? _pendingDeviceAuth;
+    private string? _pendingDeviceInstructions;
 
     public AuthenticationService(ILogger<AuthenticationService> logger)
     {
@@ -84,9 +86,9 @@ public class AuthenticationService : IAuthenticationService
     }
 
     /// <summary>
-    /// Authenticate using device code flow - ideal for server scenarios
+    /// Start device code authentication - returns device code and URL immediately
     /// </summary>
-    public async Task<string> AuthenticateDeviceCodeAsync()
+    public async Task<string> StartDeviceCodeAuthAsync()
     {
         try
         {
@@ -95,16 +97,73 @@ public class AuthenticationService : IAuthenticationService
                 return Messages.PublicClientNotInitialized;
             }
 
+            if (_pendingDeviceAuth != null && !_pendingDeviceAuth.IsCompleted)
+            {
+                return $"Device authentication already in progress.\n\n{_pendingDeviceInstructions}";
+            }
+
             _logger.LogInformation("Starting device code authentication");
 
-            var result = await _publicClientApp
+            string deviceInstructions = string.Empty;
+            var taskCompletionSource = new TaskCompletionSource<string>();
+
+            // Start the device code flow but don't await it
+            _pendingDeviceAuth = _publicClientApp
                 .AcquireTokenWithDeviceCode(AzureAdConfiguration.PowerBIScopes, callback =>
                 {
-                    _logger.LogInformation("Device code authentication: {UserCode} | {VerificationUrl}",
+                    deviceInstructions = $@"🔐 **Device Code Authentication Started**
+
+**Step 1:** Open your web browser and go to:
+👉 {callback.VerificationUrl}
+
+**Step 2:** Enter this device code:
+📋 **{callback.UserCode}**
+
+**Step 3:** Complete the sign-in process
+
+⏳ **Use 'check_device_auth_status' tool to check completion status**
+
+You have {callback.ExpiresOn.Subtract(DateTimeOffset.Now).Minutes} minutes to complete this.";
+
+                    _pendingDeviceInstructions = deviceInstructions;
+                    _logger.LogInformation("Device code: {UserCode} | URL: {VerificationUrl}",
                         callback.UserCode, callback.VerificationUrl);
+
+                    // Signal that instructions are ready
+                    taskCompletionSource.SetResult(deviceInstructions);
                     return Task.FromResult(0);
                 })
                 .ExecuteAsync();
+
+            // Wait for the callback to provide the instructions
+            return await taskCompletionSource.Task;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start device code authentication");
+            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Check the status of pending device code authentication
+    /// </summary>
+    public async Task<string> CheckDeviceAuthStatusAsync()
+    {
+        try
+        {
+            if (_pendingDeviceAuth == null)
+            {
+                return "No device authentication in progress. Use 'start_device_code_auth' first.";
+            }
+
+            if (!_pendingDeviceAuth.IsCompleted)
+            {
+                return $"⏳ Device authentication still pending...\n\n{_pendingDeviceInstructions}";
+            }
+
+            // Authentication completed, get the result
+            var result = await _pendingDeviceAuth;
 
             _currentAuth = McpAuthenticationResult.Success(
                 result.AccessToken,
@@ -115,19 +174,22 @@ public class AuthenticationService : IAuthenticationService
             );
 
             _logger.LogInformation("Device code authentication completed successfully for user: {Username}", result.Account.Username);
-            return string.Format(Messages.InteractiveAuthenticationSuccessTemplate, result.Account.Username);
-        }
-        catch (MsalException msalEx)
-        {
-            _logger.LogError(msalEx, "MSAL device code authentication failed");
-            _currentAuth = null;
-            return string.Format(Messages.AuthenticationFailedTemplate, msalEx.Message);
+
+            // Clear pending auth
+            _pendingDeviceAuth = null;
+            _pendingDeviceInstructions = null;
+
+            return $@"✅ **Authentication Successful!**
+Signed in as: {result.Account.Username}
+Tenant: {result.TenantId}";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Device code authentication failed");
             _currentAuth = null;
-            return string.Format(Messages.AuthenticationErrorTemplate, ex.Message);
+            _pendingDeviceAuth = null;
+            _pendingDeviceInstructions = null;
+            return string.Format(Messages.AuthenticationFailedTemplate, ex.Message);
         }
     }
 
