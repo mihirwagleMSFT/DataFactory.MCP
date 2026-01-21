@@ -327,11 +327,8 @@ public class FabricDataflowService : FabricServiceBase, IFabricDataflowService
                 (workspaceId, nameof(workspaceId)),
                 (dataflowId, nameof(dataflowId)));
 
-            if (string.IsNullOrWhiteSpace(queryName))
-                throw new ArgumentException("Query name is required", nameof(queryName));
-
-            if (string.IsNullOrWhiteSpace(mCode))
-                throw new ArgumentException("M code is required", nameof(mCode));
+            ValidationService.ValidateRequiredString(queryName, nameof(queryName));
+            ValidationService.ValidateRequiredString(mCode, nameof(mCode));
 
             Logger.LogInformation("Adding/updating query '{QueryName}' in dataflow {DataflowId} in workspace {WorkspaceId}",
                 queryName, dataflowId, workspaceId);
