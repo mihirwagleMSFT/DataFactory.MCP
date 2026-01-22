@@ -104,6 +104,12 @@ public class DataflowDefinitionProcessor : IDataflowDefinitionProcessor
         // Convert the entire JsonElement to a Dictionary for easier manipulation
         var metadataDict = _dataTransformationService.JsonElementToDictionary(currentMetadata);
 
+        // Ensure documentLocale is set (required for proper date/number parsing)
+        if (!metadataDict.ContainsKey("documentLocale"))
+        {
+            metadataDict["documentLocale"] = "en-US";
+        }
+
         // Handle connections array
         if (!metadataDict.ContainsKey("connections"))
         {
@@ -328,6 +334,12 @@ public class DataflowDefinitionProcessor : IDataflowDefinitionProcessor
     {
         var metadataDict = _dataTransformationService.JsonElementToDictionary(currentMetadata);
 
+        // Ensure documentLocale is set (required for proper date/number parsing)
+        if (!metadataDict.ContainsKey("documentLocale"))
+        {
+            metadataDict["documentLocale"] = "en-US";
+        }
+
         // Handle queriesMetadata object
         if (!metadataDict.ContainsKey("queriesMetadata"))
         {
@@ -342,11 +354,42 @@ public class DataflowDefinitionProcessor : IDataflowDefinitionProcessor
         {
             // Add new query metadata with a generated GUID
             var queryId = Guid.NewGuid().ToString();
-            queriesMetadata[queryName] = new Dictionary<string, object>
+
+            // Determine if this is a DataDestination query (helper query for ETL)
+            var isDataDestinationQuery = queryName.EndsWith("_DataDestination", StringComparison.OrdinalIgnoreCase);
+
+            var queryMetadataEntry = new Dictionary<string, object>
             {
                 ["queryId"] = queryId,
-                ["queryName"] = queryName
+                ["queryName"] = queryName,
+                ["loadEnabled"] = false  // Prevent loading to default destination
             };
+
+            // DataDestination queries should be hidden from UI
+            if (isDataDestinationQuery)
+            {
+                queryMetadataEntry["isHidden"] = true;
+            }
+
+            queriesMetadata[queryName] = queryMetadataEntry;
+        }
+        else
+        {
+            // Update existing query to ensure loadEnabled is set
+            if (queriesMetadata[queryName] is Dictionary<string, object> existingEntry)
+            {
+                if (!existingEntry.ContainsKey("loadEnabled"))
+                {
+                    existingEntry["loadEnabled"] = false;
+                }
+
+                // Ensure DataDestination queries are hidden
+                var isDataDestinationQuery = queryName.EndsWith("_DataDestination", StringComparison.OrdinalIgnoreCase);
+                if (isDataDestinationQuery && !existingEntry.ContainsKey("isHidden"))
+                {
+                    existingEntry["isHidden"] = true;
+                }
+            }
         }
 
         metadataDict["queriesMetadata"] = queriesMetadata;
