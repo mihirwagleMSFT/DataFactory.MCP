@@ -1,13 +1,14 @@
 using System.Collections.Concurrent;
 using DataFactory.MCP.Abstractions.Interfaces;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 
 namespace DataFactory.MCP.Services.BackgroundTasks;
 
 /// <summary>
-/// Monitors all active background jobs using a single timer-based polling loop.
-/// More efficient than spawning a Task per job.
-/// Thread-safe for concurrent job registration.
+/// Manages the complete lifecycle of background jobs: start, track, monitor, and notify.
+/// Uses a single timer-based polling loop for efficiency.
+/// Thread-safe for concurrent operations.
 /// </summary>
 public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
 {
@@ -15,7 +16,8 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
     private static readonly TimeSpan MaxJobAge = TimeSpan.FromHours(4);
 
     private readonly ConcurrentDictionary<string, MonitoredJob> _activeJobs = new();
-    private readonly IBackgroundTaskTracker _taskTracker;
+    private readonly ConcurrentDictionary<string, TrackedTask> _allTasks = new();
+    private readonly IMcpSessionAccessor _sessionAccessor;
     private readonly INotificationQueue _notificationQueue;
     private readonly ILogger<BackgroundJobMonitor> _logger;
     private readonly Timer _pollTimer;
@@ -23,11 +25,11 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
     private bool _disposed;
 
     public BackgroundJobMonitor(
-        IBackgroundTaskTracker taskTracker,
+        IMcpSessionAccessor sessionAccessor,
         INotificationQueue notificationQueue,
         ILogger<BackgroundJobMonitor> logger)
     {
-        _taskTracker = taskTracker;
+        _sessionAccessor = sessionAccessor;
         _notificationQueue = notificationQueue;
         _logger = logger;
 
@@ -38,10 +40,44 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
             PollInterval.TotalSeconds);
     }
 
-    public void RegisterJob(IBackgroundJob job)
+    public async Task<BackgroundJobResult> StartJobAsync(IBackgroundJob job, McpSession session)
     {
         ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(session);
 
+        // Store session for notifications
+        _sessionAccessor.CurrentSession = session;
+
+        _logger.LogInformation("Starting background job {JobType}: {DisplayName} (ID: {JobId})",
+            job.JobType, job.DisplayName, job.JobId);
+
+        // Start the job
+        var startResult = await job.StartAsync();
+
+        // Track the task
+        var trackedTask = new TrackedTask
+        {
+            TaskId = job.JobId,
+            JobType = job.JobType,
+            DisplayName = job.DisplayName,
+            Status = startResult.Status,
+            StartedAt = startResult.StartedAt,
+            Context = startResult.Context
+        };
+        _allTasks[job.JobId] = trackedTask;
+
+        if (startResult.IsComplete)
+        {
+            // Job completed immediately (or failed to start)
+            trackedTask.Status = startResult.Status;
+            trackedTask.CompletedAt = startResult.CompletedAt ?? DateTime.UtcNow;
+            trackedTask.FailureReason = startResult.ErrorMessage;
+
+            EnqueueNotification(job, startResult);
+            return startResult;
+        }
+
+        // Register for monitoring
         var monitoredJob = new MonitoredJob
         {
             Job = job,
@@ -50,8 +86,8 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
 
         if (_activeJobs.TryAdd(job.JobId, monitoredJob))
         {
-            _logger.LogInformation("Registered job for monitoring: {JobType} '{DisplayName}' (ID: {JobId})",
-                job.JobType, job.DisplayName, job.JobId);
+            _logger.LogDebug("Job {JobId} registered for monitoring. Active jobs: {Count}",
+                job.JobId, _activeJobs.Count);
 
             // Start polling if this is the first job
             if (_activeJobs.Count == 1)
@@ -59,10 +95,18 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
                 StartPolling();
             }
         }
-        else
-        {
-            _logger.LogWarning("Job {JobId} is already being monitored", job.JobId);
-        }
+
+        return startResult;
+    }
+
+    public TrackedTask? GetTask(string taskId)
+    {
+        return _allTasks.TryGetValue(taskId, out var task) ? task : null;
+    }
+
+    public IReadOnlyList<TrackedTask> GetAllTasks()
+    {
+        return _allTasks.Values.ToList().AsReadOnly();
     }
 
     public bool HasActiveJobs => !_activeJobs.IsEmpty;
@@ -112,7 +156,6 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
 
         _logger.LogDebug("Polling {Count} active job(s)", _activeJobs.Count);
 
-        var completedJobs = new List<string>();
         var now = DateTime.UtcNow;
 
         // Check all jobs in parallel
@@ -175,7 +218,7 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
 
         var results = await Task.WhenAll(checkTasks);
 
-        // Remove completed jobs
+        // Remove completed jobs from active monitoring
         foreach (var jobId in results.Where(id => id != null))
         {
             _activeJobs.TryRemove(jobId!, out _);
@@ -190,27 +233,28 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
 
     private void HandleJobCompletion(IBackgroundJob job, BackgroundJobResult result)
     {
-        // Update tracker
-        _taskTracker.Update(job.JobId, task =>
+        // Update tracked task
+        if (_allTasks.TryGetValue(job.JobId, out var task))
         {
             task.Status = result.Status;
             task.CompletedAt = result.CompletedAt ?? DateTime.UtcNow;
             task.FailureReason = result.ErrorMessage;
-        });
+        }
 
         // Queue notification
-        var notification = CreateNotification(job, result);
-        _notificationQueue.Enqueue(notification);
+        EnqueueNotification(job, result);
     }
 
-    private static QueuedNotification CreateNotification(IBackgroundJob job, BackgroundJobResult result)
+    private void EnqueueNotification(IBackgroundJob job, BackgroundJobResult result)
     {
         var title = $"{job.JobType} {result.Status}";
         var duration = result.DurationFormatted ?? "unknown duration";
 
+        QueuedNotification notification;
+
         if (result.IsSuccess)
         {
-            return new QueuedNotification
+            notification = new QueuedNotification
             {
                 Title = title,
                 Message = $"'{job.DisplayName}' completed successfully in {duration}",
@@ -219,7 +263,7 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
         }
         else if (result.Status == "Timeout")
         {
-            return new QueuedNotification
+            notification = new QueuedNotification
             {
                 Title = title,
                 Message = $"'{job.DisplayName}' timed out",
@@ -228,13 +272,15 @@ public class BackgroundJobMonitor : IBackgroundJobMonitor, IDisposable
         }
         else
         {
-            return new QueuedNotification
+            notification = new QueuedNotification
             {
                 Title = title,
                 Message = $"'{job.DisplayName}' failed: {result.ErrorMessage ?? "Unknown error"}",
                 Level = NotificationLevel.Error
             };
         }
+
+        _notificationQueue.Enqueue(notification);
     }
 
     public void Dispose()

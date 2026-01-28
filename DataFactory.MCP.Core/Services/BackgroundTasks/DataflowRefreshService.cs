@@ -11,23 +11,20 @@ namespace DataFactory.MCP.Services.BackgroundTasks;
 
 /// <summary>
 /// High-level service for dataflow refresh operations.
-/// Composes IBackgroundJobRunner with DataflowRefreshJob.
+/// Composes IBackgroundJobMonitor with DataflowRefreshJob.
 /// </summary>
 public class DataflowRefreshService : IDataflowRefreshService
 {
-    private readonly IBackgroundJobRunner _jobRunner;
-    private readonly IBackgroundTaskTracker _taskTracker;
+    private readonly IBackgroundJobMonitor _jobMonitor;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILoggerFactory _loggerFactory;
 
     public DataflowRefreshService(
-        IBackgroundJobRunner jobRunner,
-        IBackgroundTaskTracker taskTracker,
+        IBackgroundJobMonitor jobMonitor,
         IHttpClientFactory httpClientFactory,
         ILoggerFactory loggerFactory)
     {
-        _jobRunner = jobRunner;
-        _taskTracker = taskTracker;
+        _jobMonitor = jobMonitor;
         _httpClientFactory = httpClientFactory;
         _loggerFactory = loggerFactory;
     }
@@ -50,8 +47,8 @@ public class DataflowRefreshService : IDataflowRefreshService
             executeOption,
             parameters);
 
-        // Run it
-        var result = await _jobRunner.RunAsync(job, session);
+        // Start and monitor it
+        var result = await _jobMonitor.StartJobAsync(job, session);
 
         // Map to DataflowRefreshResult for backward compatibility
         return new DataflowRefreshResult
@@ -94,7 +91,7 @@ public class DataflowRefreshService : IDataflowRefreshService
         };
     }
 
-    public IReadOnlyList<TrackedTask> GetAllTasks() => _taskTracker.GetAllTasks();
+    public IReadOnlyList<TrackedTask> GetAllTasks() => _jobMonitor.GetAllTasks();
 
-    public TrackedTask? GetTask(string taskId) => _taskTracker.GetTask(taskId);
+    public TrackedTask? GetTask(string taskId) => _jobMonitor.GetTask(taskId);
 }

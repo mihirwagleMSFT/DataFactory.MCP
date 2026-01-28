@@ -77,10 +77,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IPlatformNotificationProvider, WindowsToastNotificationProvider>()
             .AddSingleton<IPlatformNotificationProvider, MacOsNotificationProvider>()
             .AddSingleton<IPlatformNotificationProvider, LinuxNotificationProvider>()
-            // Background task system (SOLID: single monitor for efficiency)
-            .AddSingleton<IBackgroundTaskTracker, BackgroundTaskTracker>()
+            // Background task system (consolidated: monitor handles start, track, poll, notify)
             .AddSingleton<IBackgroundJobMonitor, BackgroundJobMonitor>()
-            .AddSingleton<IBackgroundJobRunner, BackgroundJobRunner>()
             .AddSingleton<IDataflowRefreshService, DataflowRefreshService>()
             // Notification queue - processes notifications with spacing to prevent overlap
             .AddSingleton<INotificationQueue, NotificationQueue>();
