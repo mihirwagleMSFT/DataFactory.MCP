@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using DataFactory.MCP.Extensions;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -15,6 +18,13 @@ var logger = loggerFactory.CreateLogger("DataFactory.MCP.Startup");
 
 // Register all DataFactory MCP services (shared with HTTP version)
 builder.Services.AddDataFactoryMcpServices();
+
+// Configure MCP server capabilities - declare logging support for background notifications
+builder.Services.Configure<McpServerOptions>(options =>
+{
+    options.Capabilities ??= new ServerCapabilities();
+    options.Capabilities.Logging = new LoggingCapability();
+});
 
 // Configure MCP server with stdio transport and register tools
 logger.LogInformation("Registering core MCP tools...");
