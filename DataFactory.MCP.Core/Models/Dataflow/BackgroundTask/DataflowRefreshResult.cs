@@ -38,9 +38,36 @@ public record DataflowRefreshResult
         : null;
 
     /// <summary>
-    /// Human-readable duration string
+    /// Human-readable duration string (e.g., "28 seconds", "2 minutes 15 seconds")
     /// </summary>
-    public string? DurationFormatted => Duration?.ToString(@"hh\:mm\:ss");
+    public string? DurationFormatted => FormatDuration(Duration);
+
+    private static string? FormatDuration(TimeSpan? duration)
+    {
+        if (duration == null) return null;
+
+        var ts = duration.Value;
+
+        if (ts.TotalSeconds < 60)
+            return ts.Seconds == 1 ? "1 second" : $"{ts.Seconds} seconds";
+
+        if (ts.TotalMinutes < 60)
+        {
+            var mins = (int)ts.TotalMinutes;
+            var secs = ts.Seconds;
+            var minPart = mins == 1 ? "1 minute" : $"{mins} minutes";
+            if (secs == 0) return minPart;
+            var secPart = secs == 1 ? "1 second" : $"{secs} seconds";
+            return $"{minPart} {secPart}";
+        }
+
+        var hours = (int)ts.TotalHours;
+        var minutes = ts.Minutes;
+        var hourPart = hours == 1 ? "1 hour" : $"{hours} hours";
+        if (minutes == 0) return hourPart;
+        var minutePart = minutes == 1 ? "1 minute" : $"{minutes} minutes";
+        return $"{hourPart} {minutePart}";
+    }
 
     /// <summary>
     /// Error message if operation failed to start

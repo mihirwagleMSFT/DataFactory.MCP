@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<FabricDataSourceConnectionFactory>()
             // Background task management with MCP notifications
             .AddSingleton<IMcpNotificationService, McpNotificationService>()
+            .AddSingleton<ISystemNotificationService, SystemNotificationService>()
             .AddSingleton<IBackgroundTaskManager, BackgroundTaskManager>();
 
         return services;

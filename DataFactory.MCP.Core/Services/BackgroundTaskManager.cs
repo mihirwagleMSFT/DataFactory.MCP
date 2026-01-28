@@ -12,6 +12,7 @@ namespace DataFactory.MCP.Services;
 /// <summary>
 /// Manages background tasks and sends MCP notifications on completion.
 /// Polls Fabric API for job status and notifies client when done.
+/// Also sends cross-platform system notifications (toast/banner) for user visibility.
 /// </summary>
 public class BackgroundTaskManager : IBackgroundTaskManager
 {
@@ -19,16 +20,19 @@ public class BackgroundTaskManager : IBackgroundTaskManager
     private static readonly TimeSpan MaxTaskDuration = TimeSpan.FromHours(4);
 
     private readonly IMcpNotificationService _notificationService;
+    private readonly ISystemNotificationService _systemNotificationService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<BackgroundTaskManager> _logger;
     private readonly ConcurrentDictionary<string, BackgroundTaskInfo> _tasks = new();
 
     public BackgroundTaskManager(
         IMcpNotificationService notificationService,
+        ISystemNotificationService systemNotificationService,
         IHttpClientFactory httpClientFactory,
         ILogger<BackgroundTaskManager> logger)
     {
         _notificationService = notificationService;
+        _systemNotificationService = systemNotificationService;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
@@ -301,7 +305,44 @@ public class BackgroundTaskManager : IBackgroundTaskManager
                 : $"❌ Dataflow refresh '{context.DisplayName}' {result.Status}: {result.FailureReason ?? "Unknown error"}"
         };
 
+        // Send MCP notification (for MCP client integration)
         await _notificationService.SendNotificationAsync(session, level, LoggerName, notificationData);
+
+        // Send system notification (cross-platform toast/banner for user visibility)
+        await SendSystemNotificationAsync(context, result);
+    }
+
+    /// <summary>
+    /// Sends a cross-platform system notification (toast/banner) when a background task completes.
+    /// This provides visibility even when the user is not actively looking at the MCP client.
+    /// </summary>
+    private async Task SendSystemNotificationAsync(DataflowRefreshContext context, DataflowRefreshResult result)
+    {
+        try
+        {
+            var title = $"Dataflow Refresh {result.Status}";
+
+            if (result.IsSuccess)
+            {
+                var message = $"'{context.DisplayName}' completed successfully in {result.DurationFormatted}";
+                await _systemNotificationService.ShowSuccessAsync(title, message);
+            }
+            else if (result.Status == "Timeout")
+            {
+                var message = $"'{context.DisplayName}' timed out after {MaxTaskDuration.TotalHours} hours";
+                await _systemNotificationService.ShowWarningAsync(title, message);
+            }
+            else
+            {
+                var message = $"'{context.DisplayName}' failed: {result.FailureReason ?? "Unknown error"}";
+                await _systemNotificationService.ShowErrorAsync(title, message);
+            }
+        }
+        catch (Exception ex)
+        {
+            // System notifications are best-effort, don't fail the main flow
+            _logger.LogDebug(ex, "Failed to send system notification for task completion");
+        }
     }
 
     /// <inheritdoc />
