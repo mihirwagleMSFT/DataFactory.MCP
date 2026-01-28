@@ -34,18 +34,18 @@ public class SystemToastNotificationService : IUserNotificationService
     {
         if (_provider == null)
         {
-            _logger.LogDebug("No notification provider available, skipping notification: {Title}", title);
+            _logger.LogWarning("No notification provider available, skipping notification: {Title} {Message}", title, message);
             return;
         }
 
         try
         {
             await _provider.ShowAsync(title, message, level);
-            _logger.LogDebug("Notification shown via {Provider}: {Title}", _provider.GetType().Name, title);
+            _logger.LogInformation("Notification shown via {Provider}: {Title} {Message}", _provider.GetType().Name, title, message);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to show notification: {Title}", title);
+            _logger.LogWarning(ex, "Failed to show notification: {Title} {Message}", title, message);
         }
     }
 }
